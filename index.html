@@ -166,11 +166,11 @@
         };
 
         let currentLevel = 1;
-        let isAIMode = false; // False = Vs Friend, True = Vs AI Engine
+        let isAIMode = false; 
 
         const levelDescriptions = {
             1: "Level 1: Normal Chess. Standard movement rules apply.",
-            2: "Level 2: Goblin Pawns! Pawns move 3 diagonally & 2 forward, jumping over blocking pieces.",
+            2: "Level 2: Goblin Pawns! Pawns can move 1 or 2 squares forward or diagonally, jumping over blocking pieces.",
             3: "Level 3: Horse Queens. The traditional Queen gains full Knight movement attributes.",
             4: "Level 4: Phantom Rooks. Castles can leap over obstacles natively like Knights.",
             5: "Level 5: Kinetic Bishops. Clergy rebound and bank off the boundaries of the board matrix.",
@@ -258,7 +258,6 @@
                         
                         if (itemSlippedState[r][c]) pieceDiv.classList.add('slipped-piece');
                         
-                        // Prevent dragging Black pieces if it's the AI's turn
                         if (!gameOver && ((turn === 'w' && isWhite) || (turn === 'b' && !isWhite && !isAIMode))) {
                             pieceDiv.setAttribute('draggable', 'true');
                             pieceDiv.addEventListener('dragstart', (e) => onDragStart(e, r, c));
@@ -271,7 +270,6 @@
             }
         }
 
-        // --- MODE TOGGLE LOGIC ---
         modeToggleBtn.addEventListener('click', () => {
             isAIMode = !isAIMode;
             modeToggleBtn.textContent = isAIMode ? "Game Mode: Vs Grandmaster AI" : "Game Mode: Vs Friend (Local)";
@@ -384,9 +382,15 @@
 
             switch (type) {
                 case 'p':
+                    const forward = isWhite ? -1 : 1;
                     if (lvl2) {
-                        const forward = isWhite ? -1 : 1;
-                        [[forward * 2, 0], [forward * 3, 3], [forward * 3, -3]].forEach(([dr, dc]) => {
+                        // Goblin Pawns: 1 or 2 squares forward or diagonally (Jumping over blocks)
+                        const goblinOffsets = [
+                            [forward, 0], [forward * 2, 0],     // Forward 1 and 2
+                            [forward, -1], [forward, 1],       // Diagonal 1
+                            [forward * 2, -2], [forward * 2, 2] // Diagonal 2
+                        ];
+                        goblinOffsets.forEach(([dr, dc]) => {
                             const targetR = r + dr, targetC = c + dc;
                             if (isOnBoard(targetR, targetC)) {
                                 const target = currentBoard[targetR][targetC];
@@ -396,18 +400,18 @@
                             }
                         });
                     } else {
-                        const dir = isWhite ? -1 : 1;
-                        if (isOnBoard(r + dir, c) && !currentBoard[r + dir][c]) {
-                            moves.push({ fromR: r, fromC: c, toR: r + dir, toC: c, type: 'normal' });
-                            if (r === (isWhite ? 6 : 1) && !currentBoard[r + dir * 2][c]) {
-                                moves.push({ fromR: r, fromC: c, toR: r + dir * 2, toC: c, type: 'normal' });
+                        // Standard Pawns
+                        if (isOnBoard(r + forward, c) && !currentBoard[r + forward][c]) {
+                            moves.push({ fromR: r, fromC: c, toR: r + forward, toC: c, type: 'normal' });
+                            if (r === (isWhite ? 6 : 1) && !currentBoard[r + forward * 2][c]) {
+                                moves.push({ fromR: r, fromC: c, toR: r + forward * 2, toC: c, type: 'normal' });
                             }
                         }
                         [-1, 1].forEach(dc => {
-                            if (isOnBoard(r + dir, c + dc)) {
-                                const target = currentBoard[r + dir][c + dc];
+                            if (isOnBoard(r + forward, c + dc)) {
+                                const target = currentBoard[r + forward][c + dc];
                                 if (target && isEnemy(piece, target) && !isSlipped) {
-                                    moves.push({ fromR: r, fromC: c, toR: r + dir, toC: c + dc, type: 'normal' });
+                                    moves.push({ fromR: r, fromC: c, toR: r + forward, toC: c + dc, type: 'normal' });
                                 }
                             }
                         });
@@ -579,7 +583,6 @@
             return false;
         }
 
-        // --- ENGINE COMPUTATION LOGIC ---
         function getAllMoves(currentBoard, color) {
             let moves = [];
             for (let r = 0; r < 8; r++) {
