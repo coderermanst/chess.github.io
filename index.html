@@ -87,7 +87,7 @@
             border: 5px solid #34495e;
             box-shadow: 0 12px 28px rgba(0,0,0,0.4);
             position: relative;
-            background-color: #88929a; /* Smooth background fallback */
+            background-color: #88929a;
         }
         .cell {
             width: 65px;
@@ -125,15 +125,11 @@
             align-items: center;
             z-index: 3;
             cursor: grab;
-            /* 0.2s Slide Intro Transition */
             animation: slideIn 0.2s cubic-bezier(0.25, 1, 0.5, 1) forwards;
             transition: transform 0.15s ease, filter 0.15s ease;
         }
         .piece:hover {
             transform: scale(1.05);
-        }
-        .piece:active { 
-            cursor: grabbing; 
         }
         
         .piece-w { color: #ffffff; filter: drop-shadow(0px 2px 2px rgba(0,0,0,0.75)); }
@@ -155,16 +151,54 @@
             pointer-events: none;
         }
 
-        /* --- Smooth Slide Keyframe --- */
+        /* Replay Engine UI Controls */
+        #replay-panel {
+            display: none; /* Injected dynamically */
+            flex-direction: column;
+            align-items: center;
+            background-color: #2c3e50;
+            border: 2px dashed #f1c40f;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+            width: 480px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            animation: slideIn 0.3s ease-out;
+        }
+        .replay-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .replay-btn {
+            background-color: #34495e;
+            color: #f1c40f;
+            border: 1px solid #f1c40f;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s ease;
+        }
+        .replay-btn:hover:not(:disabled) {
+            background-color: #f1c40f;
+            color: #2c3e50;
+        }
+        .replay-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+            border-color: #7f8c8d;
+            color: #7f8c8d;
+        }
+        #replay-counter {
+            font-size: 1rem;
+            font-weight: bold;
+            color: #ecf0f1;
+        }
+
         @keyframes slideIn {
-            0% { 
-                transform: translateY(12px); 
-                opacity: 0; 
-            }
-            100% { 
-                transform: translateY(0); 
-                opacity: 1; 
-            }
+            0% { transform: translateY(12px); opacity: 0; }
+            100% { transform: translateY(0); opacity: 1; }
         }
     </style>
 </head>
@@ -184,6 +218,17 @@
     <div id="status" class="white-turn">White's Turn</div>
     <div id="chessboard"></div>
 
+    <div id="replay-panel">
+        <div id="replay-counter">Reviewing Move: 0 / 0</div>
+        <div class="replay-buttons">
+            <button class="replay-btn" id="btn-first">⏮ First</button>
+            <button class="replay-btn" id="btn-prev">◀ Back</button>
+            <button class="replay-btn" id="btn-next">Next ▶</button>
+            <button class="replay-btn" id="btn-last">Last ⏭</button>
+        </div>
+        <button class="replay-btn" id="btn-restart" style="margin-top:12px; border-color:#2ecc71; color:#2ecc71;">🔄 Reset & Play Again</button>
+    </div>
+
     <script>
         const boardElem = document.getElementById('chessboard');
         const statusElem = document.getElementById('status');
@@ -191,6 +236,15 @@
         const levelValDisplay = document.getElementById('level-val');
         const levelDescDisplay = document.getElementById('level-desc');
         const modeToggleBtn = document.getElementById('mode-toggle');
+        
+        // Replay Dom References
+        const replayPanel = document.getElementById('replay-panel');
+        const replayCounter = document.getElementById('replay-counter');
+        const btnFirst = document.getElementById('btn-first');
+        const btnPrev = document.getElementById('btn-prev');
+        const btnNext = document.getElementById('btn-next');
+        const btnLast = document.getElementById('btn-last');
+        const btnRestart = document.getElementById('btn-restart');
 
         const symbols = {
             'P': '♙', 'R': '♖', 'N': '♘', 'B': '♗', 'Q': '♕', 'K': '♔',
@@ -219,6 +273,11 @@
         let selected = null; 
         let gameOver = false;
 
+        // --- REPLAY STATE HISTORY DATABASE ---
+        let gameHistory = [];
+        let replayIndex = 0;
+        let isReplaying = false;
+
         // --- PST ENGINE ARRAYS ---
         const pawnPST = [[0,0,0,0,0,0,0,0],[50,50,50,50,50,50,50,50],[10,10,20,30,30,20,10,10],[5,5,10,25,25,10,5,5],[0,0,0,20,20,0,0,0],[5,-5,-10,0,0,-10,-5,5],[5,10,10,-20,-20,10,10,5],[0,0,0,0,0,0,0,0]];
         const knightPST = [[-50,-40,-30,-30,-30,-30,-40,-50],[-40,-20,0,0,0,0,-20,-40],[-30,0,10,15,15,10,0,-30],[-30,5,15,20,20,15,5,-30],[-30,0,15,20,20,15,0,-30],[-30,5,10,15,15,10,5,-30],[-40,-20,0,5,5,0,-20,-40],[-50,-40,-30,-30,-30,-30,-40,-50]];
@@ -227,7 +286,6 @@
         const queenPST = [[-20,-10,-10,-5,-5,-10,-10,-20],[-10,0,0,0,0,0,0,-10],[-10,0,5,5,5,5,0,-10],[-5,0,5,5,5,5,0,-5],[0,0,5,5,5,5,0,-5],[-10,5,5,5,5,5,0,-10],[-10,0,5,0,0,0,0,-10],[-20,-10,-10,-5,-5,-10,-10,-20]];
         const kingPST = [[-30,-40,-40,-50,-50,-40,-40,-30],[-30,-40,-40,-50,-50,-40,-40,-30],[-30,-40,-40,-50,-50,-40,-40,-30],[-30,-40,-40,-50,-50,-40,-40,-30],[-20,-30,-30,-40,-40,-30,-30,-20],[-10,-20,-20,-20,-20,-20,-20,-10],[20,20,0,0,0,0,20,20],[20,30,10,0,0,10,30,20]];
 
-        // Generate static grid cells once to completely prevent screen flashing/re-rendering layouts
         function setupBoardDom() {
             boardElem.innerHTML = '';
             for (let r = 0; r < 8; r++) {
@@ -258,6 +316,8 @@
             turn = 'w';
             selected = null;
             gameOver = false;
+            isReplaying = false;
+            gameHistory = [];
             itemSlippedState = Array(8).fill(null).map(() => Array(8).fill(null));
             
             iceLayout = Array(8).fill(null).map(() => Array(8).fill(false));
@@ -266,13 +326,33 @@
                 spaces.forEach(([r,c]) => { iceLayout[r][c] = true; });
             }
             
+            replayPanel.style.display = 'none';
+            levelSlider.disabled = false;
+            modeToggleBtn.disabled = false;
+
+            // Save Snapshot of Starting Position
+            saveHistoryState();
+
             updateStatusDisplay();
             setupBoardDom();
             drawBoard();
         }
 
+        function saveHistoryState() {
+            gameHistory.push({
+                boardState: board.map(row => [...row]),
+                slippedState: itemSlippedState.map(row => [...row]),
+                activeTurn: turn
+            });
+        }
+
         function updateStatusDisplay() {
-            if (gameOver) return;
+            if (gameOver && !isReplaying) return;
+            if (isReplaying) {
+                statusElem.textContent = "Viewing Historic Replay Match Elements";
+                statusElem.style.color = "#f1c40f";
+                return;
+            }
             if (turn === 'w') {
                 statusElem.textContent = "White's Turn";
                 statusElem.className = "white-turn";
@@ -287,7 +367,6 @@
                 for (let c = 0; c < 8; c++) {
                     const cell = boardElem.querySelector(`[data-row="${r}"][data-col="${c}"]`);
                     
-                    // Manage Ice styling without structural rebuilds
                     if (iceLayout[r][c]) {
                         cell.classList.add('slippery');
                     } else {
@@ -302,7 +381,6 @@
                         const visualSymbol = symbols[pieceType];
 
                         if (existingPieceDiv) {
-                            // Update values selectively to minimize flashing changes
                             if (existingPieceDiv.textContent !== visualSymbol) {
                                 existingPieceDiv.textContent = visualSymbol;
                                 existingPieceDiv.className = 'piece ' + (isWhite ? 'piece-w' : 'piece-b');
@@ -314,23 +392,20 @@
                                 existingPieceDiv.classList.remove('slipped-piece');
                             }
 
-                            // Refresh drag configurations dynamically
-                            if (!gameOver && ((turn === 'w' && isWhite) || (turn === 'b' && !isWhite && !isAIMode))) {
+                            if (!gameOver && !isReplaying && ((turn === 'w' && isWhite) || (turn === 'b' && !isWhite && !isAIMode))) {
                                 existingPieceDiv.setAttribute('draggable', 'true');
-                                // Safeguard duplicate listener accumulation
                                 existingPieceDiv.ondragstart = (e) => onDragStart(e, r, c);
                             } else {
                                 existingPieceDiv.removeAttribute('draggable');
                             }
                         } else {
-                            // Create clean new element if empty space populated
                             const pieceDiv = document.createElement('div');
                             pieceDiv.classList.add('piece', isWhite ? 'piece-w' : 'piece-b');
                             pieceDiv.textContent = visualSymbol;
                             
                             if (itemSlippedState[r][c]) pieceDiv.classList.add('slipped-piece');
                             
-                            if (!gameOver && ((turn === 'w' && isWhite) || (turn === 'b' && !isWhite && !isAIMode))) {
+                            if (!gameOver && !isReplaying && ((turn === 'w' && isWhite) || (turn === 'b' && !isWhite && !isAIMode))) {
                                 pieceDiv.setAttribute('draggable', 'true');
                                 pieceDiv.addEventListener('dragstart', (e) => onDragStart(e, r, c));
                             }
@@ -360,7 +435,7 @@
         });
 
         function onDragStart(e, r, c) {
-            if (gameOver || (turn === 'b' && isAIMode)) { e.preventDefault(); return; }
+            if (gameOver || isReplaying || (turn === 'b' && isAIMode)) { e.preventDefault(); return; }
             selectPiece(r, c);
         }
 
@@ -368,12 +443,13 @@
 
         function onDrop(e) {
             e.preventDefault();
+            if (isReplaying) return;
             const cell = e.currentTarget;
             attemptMove(parseInt(cell.dataset.row), parseInt(cell.dataset.col));
         }
 
         function onSquareClick(e) {
-            if (gameOver || (turn === 'b' && isAIMode)) return;
+            if (gameOver || isReplaying || (turn === 'b' && isAIMode)) return;
             const cell = e.currentTarget;
             const r = parseInt(cell.dataset.row);
             const c = parseInt(cell.dataset.col);
@@ -414,6 +490,9 @@
                 selected = null;
                 clearHighlights();
                 
+                // Track state post mutation
+                saveHistoryState();
+
                 if (!checkGameEnd()) {
                     turn = (turn === 'w') ? 'b' : 'w';
                     updateStatusDisplay();
@@ -424,6 +503,7 @@
                     }
                 } else {
                     drawBoard();
+                    activateReplayEngine();
                 }
                 return true;
             }
@@ -726,7 +806,7 @@
         }
 
         function makeAIMove() {
-            if (gameOver || !isAIMode) return;
+            if (gameOver || isReplaying || !isAIMode) return;
             processSlipTurnRecovery('b');
             const moves = getAllMoves(board, 'b');
             if (moves.length === 0) return;
@@ -745,12 +825,56 @@
             }
 
             executeMove(board, bestMove || moves[0]);
+            
+            saveHistoryState();
+
             if (!checkGameEnd()) {
                 turn = 'w';
                 updateStatusDisplay();
+            } else {
+                activateReplayEngine();
             }
             drawBoard();
         }
+
+        // --- REPLAY SYSTEM CONTROLS ENGINE ---
+        function activateReplayEngine() {
+            isReplaying = true;
+            replayIndex = gameHistory.length - 1; 
+            levelSlider.disabled = true;
+            modeToggleBtn.disabled = true;
+            replayPanel.style.display = 'flex';
+            updateReplayView();
+        }
+
+        function updateReplayView() {
+            const currentSnapshot = gameHistory[replayIndex];
+            board = currentSnapshot.boardState.map(row => [...row]);
+            itemSlippedState = currentSnapshot.slippedState.map(row => [...row]);
+            turn = currentSnapshot.activeTurn;
+
+            // Render positions cleanly
+            drawBoard();
+            updateStatusDisplay();
+
+            // Update user tracking counters
+            replayCounter.textContent = `Reviewing Move: ${replayIndex} / ${gameHistory.length - 1}`;
+
+            // Handle functional button logic constraints
+            btnFirst.disabled = (replayIndex === 0);
+            btnPrev.disabled = (replayIndex === 0);
+            btnNext.disabled = (replayIndex === gameHistory.length - 1);
+            btnLast.disabled = (replayIndex === gameHistory.length - 1);
+        }
+
+        btnFirst.addEventListener('click', () => { replayIndex = 0; updateReplayView(); });
+        btnPrev.addEventListener('click', () => { if (replayIndex > 0) { replayIndex--; updateReplayView(); } });
+        btnNext.addEventListener('click', () => { if (replayIndex < gameHistory.length - 1) { replayIndex++; updateReplayView(); } });
+        btnLast.addEventListener('click', () => { replayIndex = gameHistory.length - 1; updateReplayView(); });
+        
+        btnRestart.addEventListener('click', () => {
+            initializeGame();
+        });
 
         initializeGame();
     </script>
