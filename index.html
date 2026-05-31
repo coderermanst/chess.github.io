@@ -75,7 +75,7 @@
             padding: 5px 15px;
             border-radius: 4px;
             text-align: center;
-            animation: pulse 2s infinite ease-in-out;
+            transition: color 0.3s ease;
         }
         .white-turn { color: #ffffff !important; }
         .black-turn { color: #111111 !important; text-shadow: 0 0 10px rgba(0,0,0,0.5); }
@@ -87,6 +87,7 @@
             border: 5px solid #34495e;
             box-shadow: 0 12px 28px rgba(0,0,0,0.4);
             position: relative;
+            background-color: #88929a; /* Smooth background fallback */
         }
         .cell {
             width: 65px;
@@ -110,7 +111,6 @@
             right: 2px;
             opacity: 0.7;
             z-index: 1;
-            animation: iceGlimmer 3s infinite ease-in-out;
         }
         .slipped-piece {
             opacity: 0.4 !important;
@@ -125,54 +125,46 @@
             align-items: center;
             z-index: 3;
             cursor: grab;
-            animation: popIn 0.25s ease-out forwards;
+            /* 0.2s Slide Intro Transition */
+            animation: slideIn 0.2s cubic-bezier(0.25, 1, 0.5, 1) forwards;
             transition: transform 0.15s ease, filter 0.15s ease;
         }
         .piece:hover {
-            transform: scale(1.08);
+            transform: scale(1.05);
         }
         .piece:active { 
             cursor: grabbing; 
-            transform: scale(1.15);
         }
         
         .piece-w { color: #ffffff; filter: drop-shadow(0px 2px 2px rgba(0,0,0,0.75)); }
         .piece-b { color: #111111; filter: drop-shadow(0px 2px 2px rgba(255,255,255,0.2)); }
         
-        /* Highlight Animations */
+        /* Highlight States */
         .selected { 
             background-color: #2ecc71 !important; 
             box-shadow: inset 0 0 10px rgba(0,0,0,0.2);
         }
         .highlighted::before {
             content: '';
-            width: 18px;
-            height: 18px;
+            width: 16px;
+            height: 16px;
             background-color: rgba(46, 204, 113, 0.7);
             border-radius: 50%;
             position: absolute;
             z-index: 2;
             pointer-events: none;
-            animation: targetPulse 1.5s infinite ease-out;
         }
 
-        /* --- Keyframes --- */
-        @keyframes popIn {
-            0% { transform: scale(0.6); opacity: 0; }
-            100% { transform: scale(1); opacity: 1; }
-        }
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); opacity: 0.9; }
-            50% { transform: scale(1.03); opacity: 1; }
-        }
-        @keyframes targetPulse {
-            0% { transform: scale(0.8); opacity: 0.6; }
-            50% { transform: scale(1.1); opacity: 0.9; }
-            100% { transform: scale(0.8); opacity: 0.6; }
-        }
-        @keyframes iceGlimmer {
-            0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.6; }
-            50% { transform: scale(1.15) rotate(5deg); opacity: 1; }
+        /* --- Smooth Slide Keyframe --- */
+        @keyframes slideIn {
+            0% { 
+                transform: translateY(12px); 
+                opacity: 0; 
+            }
+            100% { 
+                transform: translateY(0); 
+                opacity: 1; 
+            }
         }
     </style>
 </head>
@@ -235,6 +227,23 @@
         const queenPST = [[-20,-10,-10,-5,-5,-10,-10,-20],[-10,0,0,0,0,0,0,-10],[-10,0,5,5,5,5,0,-10],[-5,0,5,5,5,5,0,-5],[0,0,5,5,5,5,0,-5],[-10,5,5,5,5,5,0,-10],[-10,0,5,0,0,0,0,-10],[-20,-10,-10,-5,-5,-10,-10,-20]];
         const kingPST = [[-30,-40,-40,-50,-50,-40,-40,-30],[-30,-40,-40,-50,-50,-40,-40,-30],[-30,-40,-40,-50,-50,-40,-40,-30],[-30,-40,-40,-50,-50,-40,-40,-30],[-20,-30,-30,-40,-40,-30,-30,-20],[-10,-20,-20,-20,-20,-20,-20,-10],[20,20,0,0,0,0,20,20],[20,30,10,0,0,10,30,20]];
 
+        // Generate static grid cells once to completely prevent screen flashing/re-rendering layouts
+        function setupBoardDom() {
+            boardElem.innerHTML = '';
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('cell', (r + c) % 2 === 0 ? 'light' : 'dark');
+                    cell.dataset.row = r;
+                    cell.dataset.col = c;
+                    cell.addEventListener('dragover', onDragOver);
+                    cell.addEventListener('drop', onDrop);
+                    cell.addEventListener('click', onSquareClick);
+                    boardElem.appendChild(cell);
+                }
+            }
+        }
+
         function initializeGame() {
             board = [
                 ['r','n','b','q','k','b','n','r'],
@@ -258,6 +267,7 @@
             }
             
             updateStatusDisplay();
+            setupBoardDom();
             drawBoard();
         }
 
@@ -273,39 +283,63 @@
         }
 
         function drawBoard() {
-            boardElem.innerHTML = '';
             for (let r = 0; r < 8; r++) {
                 for (let c = 0; c < 8; c++) {
-                    const cell = document.createElement('div');
-                    cell.classList.add('cell', (r + c) % 2 === 0 ? 'light' : 'dark');
-                    cell.dataset.row = r;
-                    cell.dataset.col = c;
-
-                    if (iceLayout[r][c]) cell.classList.add('slippery');
-
-                    cell.addEventListener('dragover', onDragOver);
-                    cell.addEventListener('drop', onDrop);
-                    cell.addEventListener('click', onSquareClick);
+                    const cell = boardElem.querySelector(`[data-row="${r}"][data-col="${c}"]`);
+                    
+                    // Manage Ice styling without structural rebuilds
+                    if (iceLayout[r][c]) {
+                        cell.classList.add('slippery');
+                    } else {
+                        cell.classList.remove('slippery');
+                    }
 
                     const pieceType = board[r][c];
+                    const existingPieceDiv = cell.querySelector('.piece');
+
                     if (pieceType) {
-                        const pieceDiv = document.createElement('div');
-                        pieceDiv.classList.add('piece');
-                        pieceDiv.textContent = symbols[pieceType];
-                        
                         const isWhite = pieceType === pieceType.toUpperCase();
-                        pieceDiv.classList.add(isWhite ? 'piece-w' : 'piece-b');
-                        
-                        if (itemSlippedState[r][c]) pieceDiv.classList.add('slipped-piece');
-                        
-                        if (!gameOver && ((turn === 'w' && isWhite) || (turn === 'b' && !isWhite && !isAIMode))) {
-                            pieceDiv.setAttribute('draggable', 'true');
-                            pieceDiv.addEventListener('dragstart', (e) => onDragStart(e, r, c));
+                        const visualSymbol = symbols[pieceType];
+
+                        if (existingPieceDiv) {
+                            // Update values selectively to minimize flashing changes
+                            if (existingPieceDiv.textContent !== visualSymbol) {
+                                existingPieceDiv.textContent = visualSymbol;
+                                existingPieceDiv.className = 'piece ' + (isWhite ? 'piece-w' : 'piece-b');
+                            }
+                            
+                            if (itemSlippedState[r][c]) {
+                                existingPieceDiv.classList.add('slipped-piece');
+                            } else {
+                                existingPieceDiv.classList.remove('slipped-piece');
+                            }
+
+                            // Refresh drag configurations dynamically
+                            if (!gameOver && ((turn === 'w' && isWhite) || (turn === 'b' && !isWhite && !isAIMode))) {
+                                existingPieceDiv.setAttribute('draggable', 'true');
+                                // Safeguard duplicate listener accumulation
+                                existingPieceDiv.ondragstart = (e) => onDragStart(e, r, c);
+                            } else {
+                                existingPieceDiv.removeAttribute('draggable');
+                            }
+                        } else {
+                            // Create clean new element if empty space populated
+                            const pieceDiv = document.createElement('div');
+                            pieceDiv.classList.add('piece', isWhite ? 'piece-w' : 'piece-b');
+                            pieceDiv.textContent = visualSymbol;
+                            
+                            if (itemSlippedState[r][c]) pieceDiv.classList.add('slipped-piece');
+                            
+                            if (!gameOver && ((turn === 'w' && isWhite) || (turn === 'b' && !isWhite && !isAIMode))) {
+                                pieceDiv.setAttribute('draggable', 'true');
+                                pieceDiv.addEventListener('dragstart', (e) => onDragStart(e, r, c));
+                            }
+                            
+                            cell.appendChild(pieceDiv);
                         }
-                        
-                        cell.appendChild(pieceDiv);
+                    } else {
+                        if (existingPieceDiv) existingPieceDiv.remove();
                     }
-                    boardElem.appendChild(cell);
                 }
             }
         }
@@ -362,10 +396,10 @@
         function selectPiece(r, c) {
             clearHighlights();
             selected = { r, c };
-            document.querySelector(`[data-row="${r}"][data-col="${c}"]`)?.classList.add('selected');
+            boardElem.querySelector(`[data-row="${r}"][data-col="${c}"]`)?.classList.add('selected');
 
             getLegalMoves(r, c, board).forEach(m => {
-                document.querySelector(`[data-row="${m.toR}"][data-col="${m.toC}"]`)?.classList.add('highlighted');
+                boardElem.querySelector(`[data-row="${m.toR}"][data-col="${m.toC}"]`)?.classList.add('highlighted');
             });
         }
 
@@ -397,7 +431,7 @@
         }
 
         function clearHighlights() {
-            document.querySelectorAll('.cell').forEach(c => c.classList.remove('selected', 'highlighted'));
+            boardElem.querySelectorAll('.cell').forEach(c => c.classList.remove('selected', 'highlighted'));
         }
 
         // --- RULE VARIANT CALCULATOR ---
