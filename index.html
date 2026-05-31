@@ -1,0 +1,235 @@
+
+                case 'n':
+                    knightMoves.forEach(([dr, dc]) => {
+                        if (isOnBoard(r + dr, c + dc)) {
+                            const target = currentBoard[r + dr][c + dc];
+                            if (!target || (isEnemy(piece, target) && !isSlipped)) {
+                                moves.push({ fromR: r, fromC: c, toR: r + dr, toC: c + dc, type: 'normal' });
+                            }
+                        }
+                    });
+                    break;
+
+                case 'k':
+                    [...rookDirs, ...bishopDirs].forEach(([dr, dc]) => {
+                        if (isOnBoard(r + dr, c + dc)) {
+                            const target = currentBoard[r + dr][c + dc];
+                            if (!target || (isEnemy(piece, target) && !isSlipped)) {
+                                moves.push({ fromR: r, fromC: c, toR: r + dr, toC: c + dc, type: 'normal' });
+                            }
+                        }
+                    });
+                    if (lvl7) {
+                        for (let tr = 0; tr < 8; tr++) {
+                            for (let tc = 0; tc < 8; tc++) {
+                                const targetPiece = currentBoard[tr][tc];
+                                if (targetPiece && !isEnemy(piece, targetPiece) && targetPiece.toLowerCase() !== 'k') {
+                                    moves.push({ fromR: r, fromC: c, toR: tr, toC: tc, type: 'swap' });
+                                }
+                            }
+                        }
+                    }
+                    break;
+            }
+            return moves;
+        }
+
+        function processSlidingMoves(r, c, directions, piece, currentBoard, moveList, isSlipped) {
+            directions.forEach(([dr, dc]) => {
+                let currR = r + dr, currC = c + dc;
+                while (isOnBoard(currR, currC)) {
+                    const target = currentBoard[currR][currC];
+                    if (!target) {
+                        moveList.push({ fromR: r, fromC: c, toR: currR, toC: currC, type: 'normal' });
+                    } else {
+                        if (isEnemy(piece, target) && !isSlipped) {
+                            moveList.push({ fromR: r, fromC: c, toR: currR, toC: currC, type: 'normal' });
+                        }
+                        break;
+                    }
+                    currR += dr; currC += dc;
+                }
+            });
+        }
+
+        function processBouncingBishops(r, c, directions, piece, currentBoard, moveList, isSlipped) {
+            directions.forEach(([dr, dc]) => {
+                let currR = r + dr, currC = c + dc, currentDr = dr, currentDc = dc, bounceCount = 0;
+                while (bounceCount <= 2) {
+                    let hitWall = false;
+                    if (currR < 0 || currR >= 8) { currentDr = -currentDr; currR += currentDr * 2; hitWall = true; }
+                    if (currC < 0 || currC >= 8) { currentDc = -currentDc; currC += currentDc * 2; hitWall = true; }
+                    if (hitWall) { bounceCount++; if (!isOnBoard(currR, currC)) break; }
+
+                    const target = currentBoard[currR][currC];
+                    if (!target) {
+                        moveList.push({ fromR: r, fromC: c, toR: currR, toC: currC, type: 'normal' });
+                    } else {
+                        if ((currR !== r || currC !== c) && isEnemy(piece, target) && !isSlipped) {
+                            moveList.push({ fromR: r, fromC: c, toR: currR, toC: currC, type: 'normal' });
+                        }
+                        break;
+                    }
+                    currR += currentDr; currC += currentDc;
+                }
+            });
+        }
+
+        function isOnBoard(r, c) { return r >= 0 && r < 8 && c >= 0 && c < 8; }
+        function isEnemy(p1, p2) { return (p1 === p1.toUpperCase()) !== (p2 === p2.toUpperCase()); }
+
+        function executeMove(targetBoard, move) {
+            const piece = targetBoard[move.fromR][move.fromC];
+            const activeFreeze = itemSlippedState[move.fromR][move.fromC];
+
+            if (move.type === 'swap') {
+                const secondaryPiece = targetBoard[move.toR][move.toC];
+                const secondaryFreeze = itemSlippedState[move.toR][move.toC];
+                targetBoard[move.toR][move.toC] = piece;
+                targetBoard[move.fromR][move.fromC] = secondaryPiece;
+                itemSlippedState[move.toR][move.toC] = activeFreeze;
+                itemSlippedState[move.fromR][move.fromC] = secondaryFreeze;
+            } else {
+                targetBoard[move.toR][move.toC] = piece;
+                targetBoard[move.fromR][move.fromC] = '';
+                itemSlippedState[move.toR][move.toC] = activeFreeze;
+                itemSlippedState[move.fromR][move.fromC] = null;
+
+                if (piece === 'P' && move.toR === 0) targetBoard[move.toR][move.toC] = 'Q';
+                if (piece === 'p' && move.toR === 7) targetBoard[move.toR][move.toC] = 'q';
+            }
+
+            if ((currentLevel === 6 || currentLevel === 8) && iceLayout[move.toR][move.toC]) {
+                itemSlippedState[move.toR][move.toC] = targetBoard[move.toR][move.toC] === targetBoard[move.toR][move.toC].toUpperCase() ? 'w' : 'b';
+            }
+        }
+
+        function processSlipTurnRecovery(color) {
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    if (itemSlippedState[r][c] === color) itemSlippedState[r][c] = null;
+                }
+            }
+        }
+
+        function checkGameEnd() {
+            let wK = false, bK = false;
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    if (board[r][c] === 'K') wK = true;
+                    if (board[r][c] === 'k') bK = true;
+                }
+            }
+            if (!wK) { 
+                statusElem.textContent = isAIMode ? "DEFEAT — THE AI TOOK YOUR KING!" : "BLACK WINS! THE WHITE KING HAS BEEN CAPTURED!"; 
+                statusElem.style.color = "#e74c3c"; gameOver = true; return true; 
+            }
+            if (!bK) { 
+                statusElem.textContent = isAIMode ? "VICTORY — YOU CAPTURED THE AI MONARCH!" : "WHITE WINS! THE BLACK KING HAS BEEN CAPTURED!"; 
+                statusElem.style.color = "#f1c40f"; gameOver = true; return true; 
+            }
+            return false;
+        }
+
+        // --- ENGINE COMPUTATION LOGIC ---
+        function getAllMoves(currentBoard, color) {
+            let moves = [];
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const piece = currentBoard[r][c];
+                    if (piece && ((color === 'w' && piece === piece.toUpperCase()) || (color === 'b' && piece === piece.toLowerCase()))) {
+                        moves.push(...getLegalMoves(r, c, currentBoard));
+                    }
+                }
+            }
+            return moves.sort((a, b) => (currentBoard[b.toR][b.toC] ? 100 : 0) - (currentBoard[a.toR][a.toC] ? 100 : 0));
+        }
+
+        function evaluateBoard(currentBoard) {
+            const values = { 'p': 100, 'n': 320, 'b': 330, 'r': 500, 'q': 900, 'k': 20000 };
+            let total = 0;
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const piece = currentBoard[r][c];
+                    if (!piece) continue;
+                    const isWhite = piece === piece.toUpperCase();
+                    const type = piece.toLowerCase();
+                    let score = values[type] || 0;
+                    if (type === 'p') score += isWhite ? pawnPST[r][c] : pawnPST[7 - r][c];
+                    else if (type === 'n') score += isWhite ? knightPST[r][c] : knightPST[7 - r][c];
+                    else if (type === 'b') score += isWhite ? bishopPST[r][c] : bishopPST[7 - r][c];
+                    else if (type === 'r') score += isWhite ? rookPST[r][c] : rookPST[7 - r][c];
+                    else if (type === 'q') score += isWhite ? queenPST[r][c] : queenPST[7 - r][c];
+                    else if (type === 'k') score += isWhite ? kingPST[r][c] : kingPST[7 - r][c];
+                    total += isWhite ? score : -score;
+                }
+            }
+            return total;
+        }
+
+        function minimax(currentBoard, depth, alpha, beta, isMaximizing) {
+            let wK = false, bK = false;
+            for(let r=0; r<8; r++) {
+                for(let c=0; c<8; c++) {
+                    if(currentBoard[r][c] === 'K') wK = true;
+                    if(currentBoard[r][c] === 'k') bK = true;
+                }
+            }
+            if (!wK) return -9999999;
+            if (!bK) return 9999999;
+            if (depth === 0) return evaluateBoard(currentBoard);
+
+            if (isMaximizing) {
+                let maxEval = -Infinity;
+                for (let move of getAllMoves(currentBoard, 'w')) {
+                    let temp = currentBoard.map(row => [...row]);
+                    executeMove(temp, move);
+                    maxEval = Math.max(maxEval, minimax(temp, depth - 1, alpha, beta, false));
+                    alpha = Math.max(alpha, maxEval);
+                    if (beta <= alpha) break;
+                }
+                return maxEval;
+            } else {
+                let minEval = Infinity;
+                for (let move of getAllMoves(currentBoard, 'b')) {
+                    let temp = currentBoard.map(row => [...row]);
+                    executeMove(temp, move);
+                    minEval = Math.min(minEval, minimax(temp, depth - 1, alpha, beta, true));
+                    beta = Math.min(beta, minEval);
+                    if (beta <= alpha) break;
+                }
+                return minEval;
+            }
+        }
+
+        function makeAIMove() {
+            if (gameOver || !isAIMode) return;
+            processSlipTurnRecovery('b');
+            const moves = getAllMoves(board, 'b');
+            if (moves.length === 0) return;
+
+            let bestMove = moves.find(m => board[m.toR][m.toC] === 'K') || null;
+
+            if (!bestMove) {
+                let bestScore = Infinity;
+                let depthLimit = (currentLevel === 5 || currentLevel === 8) ? 2 : 3;
+                for (let move of moves) {
+                    let temp = board.map(row => [...row]);
+                    executeMove(temp, move);
+                    let score = minimax(temp, depthLimit, -Infinity, Infinity, true);
+                    if (score < bestScore) { bestScore = score; bestMove = move; }
+                }
+            }
+
+            executeMove(board, bestMove || moves[0]);
+            if (!checkGameEnd()) {
+                turn = 'w';
+                updateStatusDisplay();
+            }
+            drawBoard();
+        }
+
+        initializeGame();
+    </script>
+</body>
+</html>
