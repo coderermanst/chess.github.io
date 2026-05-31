@@ -1,3 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Take King Chess - Level Modifier Variant</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            margin: 0;
+            padding: 20px;
+            user-select: none;
+        }
+        h1 { margin-bottom: 5px; }
+        p { margin-top: 0; color: #bdc3c7; text-align: center; max-width: 500px;}
+        
+        /* Level Controller Styling */
+        #level-container {
+            background-color: #34495e;
+            padding: 15px 25px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            text-align: center;
+            width: 480px;
+        }
+        #level-slider {
+            width: 100%;
+            margin: 10px 0;
+            cursor: pointer;
+        }
+        #level-desc {
+            font-size: 0.95rem;
+            color: #f1c40f;
+            min-height: 40px;
+            font-weight: bold;
+        }
+
+        #status {
+            font-size: 1.3rem;
+            margin-bottom: 15px;
+            font-weight: bold;
+            color: #2ecc71;
+        }
+        #chessboard {
+            display: grid;
+            grid-template-columns: repeat(8, 65px);
+            grid-template-rows: repeat(8, 65px);
+            border: 5px solid #34495e;
+            box-shadow: 0 12px 28px rgba(0,0,0,0.4);
+            position: relative;
+        }
+        .cell {
+            width: 65px;
+            height: 65px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 42px;
+            cursor: pointer;
+            position: relative;
+        }
+        .light { background-color: #e0e4e8; }
+        .dark { background-color: #88929a; }
+        
+        /* Slippery Ice Traps styling */
+        .slippery::after {
+            content: '🧊';
+            font-size: 14px;
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            opacity: 0.7;
+            z-index: 1;
+        }
+        /* Slipped / Frozen Piece Visual cue */
+        .slipped-piece {
+            opacity: 0.4 !important;
+            filter: grayscale(100%) contrast(150%) drop-shadow(0px 0px 8px #3498db) !important;
+        }
+
+        .piece {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 3;
+            cursor: grab;
+        }
+        .piece:active {
+            cursor: grabbing;
+        }
+        
+        .piece-w { color: #ffffff; filter: drop-shadow(0px 2px 2px rgba(0,0,0,0.75)); pointer-events: none; }
+        .piece-b { color: #111111; filter: drop-shadow(0px 2px 2px rgba(255,255,255,0.2)); pointer-events: none; }
+        
+        .selected { background-color: #2ecc71 !important; }
+        
+        .highlighted::before {
+            content: '';
+            width: 18px;
+            height: 18px;
+            background-color: rgba(46, 204, 113, 0.6);
+            border-radius: 50%;
+            position: absolute;
+            z-index: 2;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Take King Chess</h1>
+    <p>Move into danger freely. Win by physically capturing the enemy King! Use the slider to modify reality.</p>
+    
+    <div id="level-container">
+        <label for="level-slider" style="font-weight: bold; font-size: 1.1rem;">Game Rule Level: <span id="level-val">1</span></label>
+        <input type="range" id="level-slider" min="1" max="8" value="1">
+        <div id="level-desc">Level 1: Normal Chess. Standard movement rules apply.</div>
+    </div>
+
+    <div id="status">White's Turn</div>
+    <div id="chessboard"></div>
+
+    <script>
+        const boardElem = document.getElementById('chessboard');
+        const statusElem = document.getElementById('status');
+        const levelSlider = document.getElementById('level-slider');
+        const levelValDisplay = document.getElementById('level-val');
+        const levelDescDisplay = document.getElementById('level-desc');
+
+        const symbols = {
+            'P': '♙', 'R': '♖', 'N': '♘', 'B': '♗', 'Q': '♕', 'K': '♔',
+            'p': '♟', 'r': '♜', 'n': '♞', 'b': '♝', 'q': '♛', 'k': '♚'
+        };
+
+        // Track level settings
+        let currentLevel = 1;
+
+        const levelDescriptions = {
+            1: "Level 1: Normal Chess. Standard movement rules apply.",
+            2: "Level 2: Goblin Pawns! Pawns move 3 diagonally & 2 forward, and can jump completely over blocking elements.",
+            3: "Level 3: Horse Queens. The traditional Queen transforms completely into an agile Knight-Queen compound construct.",
+            4: "Level 4: Phantom Rooks. Heavy Siege Castles gain the dimensional ability to jump obstacles natively like Knights.",
+            5: "Level 5: Kinetic Bishops. Clergy track vectors that rebound off the boundaries of the board matrix to bank paths.",
+            6: "Level 6: Perilous Ice. Random tiles look slippery. Landing freezes pieces: they cannot capture and require 1 turn to stabilize.",
+            7: "Level 7: Sovereign Swap. The Monarch rules space, enjoying capability to swap coordinate matrices safely with any ally.",
+            8: "Level 8: Total Chaos Rule! Every single variant capability across all level structures initializes concurrently."
+        };
+
+        let board = [];
+        // Track frozen status matrix for level 6/8: 'w' or 'b' if a piece on that square is recovering
+        let itemSlippedState = Array(8).fill(null).map(() => Array(8).fill(null));
+        // Persistent ice layout map initialized on level load
+        let iceLayout = Array(8).fill(null).map(() => Array(8).fill(false));
+
+        let turn = 'w'; 
+        let selected = null; 
+        let gameOver = false;
+
+        // --- POSITIONAL VALUE ARRAYS ---
+        const pawnPST = [[0,0,0,0,0,0,0,0],[50,50,50,50,50,50,50,50],[10,10,20,30,30,20,10,10],[5,5,10,25,25,10,5,5],[0,0,0,20,20,0,0,0],[5,-5,-10,0,0,-10,-5,5],[5,10,10,-20,-20,10,10,5],[0,0,0,0,0,0,0,0]];
+        const knightPST = [[-50,-40,-30,-30,-30,-30,-40,-50],[-40,-20,0,0,0,0,-20,-40],[-30,0,10,15,15,10,0,-30],[-30,5,15,20,20,15,5,-30],[-30,0,15,20,20,15,0,-30],[-30,5,10,15,15,10,5,-30],[-40,-20,0,5,5,0,-20,-40],[-50,-40,-30,-30,-30,-30,-40,-50]];
+        const bishopPST = [[-20,-10,-10,-10,-10,-10,-10,-20],[-10,0,0,0,0,0,0,-10],[-10,0,5,10,10,5,0,-10],[-10,5,5,10,10,5,5,-10],[-10,0,10,10,10,10,0,-10],[-10,10,10,10,10,10,10,-10],[-10,5,0,0,0,0,5,-10],[-20,-10,-10,-10,-10,-10,-10,-20]];
+        const rookPST = [[0,0,0,0,0,0,0,0],[5,10,10,10,10,10,10,5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[0,0,0,5,5,0,0,0]];
+        const queenPST = [[-20,-10,-10,-5,-5,-10,-10,-20],[-10,0,0,0,0,0,0,-10],[-10,0,5,5,5,5,0,-10],[-5,0,5,5,5,5,0,-5],[0,0,5,5,5,5,0,-5],[-10,5,5,5,5,5,0,-10],[-10,0,5,0,0,0,0,-10],[-20,-10,-10,-5,-5,-10,-10,-20]];
+        const kingPST = [[-30,-40,-40,-50,-50,-40,-40,-30],[-30,-40,-40,-50,-50,-40,-40,-30],[-30,-40,-40,-50,-50,-40,-40,-30],[-30,-40,-40,-50,-50,-40,-40,-30],[-20,-30,-30,-40,-40,-30,-30,-20],[-10,-20,-20,-20,-20,-20,-20,-10],[20,20,0,0,0,0,20,20],[20,30,10,0,0,10,30,20]];
+
+        function initializeGame() {
+            board = [
+                ['r','n','b','q','k','b','n','r'],
+                ['p','p','p','p','p','p','p','p'],
+                ['','','','','','','',''],
+                ['','','','','','','',''],
+                ['','','','','','','',''],
+                ['','','','','','','',''],
+                ['P','P','P','P','P','P','P','P'],
+                ['R','N','B','Q','K','B','N','R']
+            ];
+            turn = 'w';
+            selected = null;
+            gameOver = false;
+            itemSlippedState = Array(8).fill(null).map(() => Array(8).fill(null));
+            
+            // Set up static ice hazards on the 3rd, 4th, 5th, 6th ranks for Level 6 & 8
+            iceLayout = Array(8).fill(null).map(() => Array(8).fill(false));
+            if (currentLevel === 6 || currentLevel === 8) {
+                // Preset distinct geometric trap spaces
+                let spaces = [[2,2], [2,5], [3,3], [3,4], [4,3], [4,4], [5,2], [5,5]];
+                spaces.forEach(([r,c]) => { iceLayout[r][c] = true; });
+            }
+            
+            statusElem.textContent = "White's Turn";
+            drawBoard();
+        }
+
+        function drawBoard() {
+            boardElem.innerHTML = '';
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('cell', (r + c) % 2 === 0 ? 'light' : 'dark');
+                    cell.dataset.row = r;
+                    cell.dataset.col = c;
+
+                    if (iceLayout[r][c]) {
+                        cell.classList.add('slippery');
+                    }
+
+                    cell.addEventListener('dragover', onDragOver);
+                    cell.addEventListener('drop', onDrop);
+                    cell.addEventListener('click', onSquareClick);
+
+                    const pieceType = board[r][c];
+                    if (pieceType) {
+                        const pieceDiv = document.createElement('div');
+                        pieceDiv.classList.add('piece');
+                        pieceDiv.textContent = symbols[pieceType];
+                        
+                        const isWhite = pieceType === pieceType.toUpperCase();
+                        pieceDiv.classList.add(isWhite ? 'piece-w' : 'piece-b');
+                        
+                        // Render visually if piece is frozen/slipped
+                        if (itemSlippedState[r][c]) {
+                            pieceDiv.classList.add('slipped-piece');
+                        }
+                        
+                        if (!gameOver && turn === 'w' && isWhite) {
+                            pieceDiv.setAttribute('draggable', 'true');
+                            pieceDiv.addEventListener('dragstart', (e) => onDragStart(e, r, c));
+                        }
+                        
+                        cell.appendChild(pieceDiv);
+                    }
+                    boardElem.appendChild(cell);
+                }
+            }
+        }
+
+        // --- LEVEL CONTROLLER SYSTEM ---
+        levelSlider.addEventListener('input', (e) => {
+            currentLevel = parseInt(e.target.value);
+            levelValDisplay.textContent = currentLevel;
+            levelDescDisplay.textContent = levelDescriptions[currentLevel];
+            initializeGame();
+        });
+
+        // --- INTERACTION FLOW CONTROL ---
+        function onDragStart(e, r, c) {
+            if (gameOver || turn === 'b') {
+                e.preventDefault();
+                return;
+            }
+            selectPiece(r, c);
+        }
+
+        function onDragOver(e) { e.preventDefault(); }
+
+        function onDrop(e) {
+            e.preventDefault();
+            const cell = e.currentTarget;
+            const r = parseInt(cell.dataset.row);
+            const c = parseInt(cell.dataset.col);
+            attemptMove(r, c);
+        }
+
+        function onSquareClick(e) {
+            if (gameOver || turn === 'b') return;
+            const cell = e.currentTarget;
+            const r = parseInt(cell.dataset.row);
+            const c = parseInt(cell.dataset.col);
+
+            if (selected) {
+                if (attemptMove(r, c)) return;
+            }
+            
+            const piece = board[r][c];
+            if (piece && piece === piece.toUpperCase()) {
+                selectPiece(r, c);
+            } else {
+                selected = null;
+                clearHighlights();
+            }
+        }
+
+        function selectPiece(r, c) {
+            clearHighlights();
+            selected = { r, c };
+            const currentCell = document.querySelector(`[data-row="${r}"][data-col="${c}"]`);
+            if (currentCell) currentCell.classList.add('selected');
+
+            const moves = getLegalMoves(r, c, board);
+            moves.forEach(m => {
+                const targetCell = document.querySelector(`[data-row="${m.toR}"][data-col="${m.toC}"]`);
+                if (targetCell) targetCell.classList.add('highlighted');
+            });
+        }
+
+        function attemptMove(r, c) {
+            if (!selected) return false;
+            const moves = getLegalMoves(selected.r, selected.c, board);
+            const validMove = moves.find(m => m.toR === r && m.toC === c);
+
+            if (validMove) {
+                // Tick down recovery state before translating piece layout
+                processSlipTurnRecovery(turn);
+                executeMove(board, validMove);
+                selected = null;
+                clearHighlights();
+                drawBoard();
+                
+                if (!checkGameEnd()) {
+                    turn = 'b';
+                    statusElem.textContent = "AI is looking deep...";
+                    setTimeout(makeAIMove, 50);
+                }
+                return true;
+            }
+            return false;
+        }
+
+        function clearHighlights() {
+            document.querySelectorAll('.cell').forEach(c => c.classList.remove('selected', 'highlighted'));
+        }
+
+        // --- DYNAMIC ENGINE RULE CALCULATOR ---
+        function getLegalMoves(r, c, currentBoard) {
+            const piece = currentBoard[r][c];
+            if (!piece) return [];
+            
+            const moves = [];
+            const isWhite = piece === piece.toUpperCase();
+            const type = piece.toLowerCase();
+            const isSlipped = itemSlippedState[r][c] !== null;
+
+            // Base direction structures
+            const rookDirs = [[1,0], [-1,0], [0,1], [0,-1]];
+            const bishopDirs = [[1,1], [1,-1], [-1,1], [-1,-1]];
+            const knightMoves = [[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]];
+
+            // Active global modifier flags
+            const lvl2 = (currentLevel === 2 || currentLevel === 8);
+            const lvl3 = (currentLevel === 3 || currentLevel === 8);
+            const lvl4 = (currentLevel === 4 || currentLevel === 8);
+            const lvl5 = (currentLevel === 5 || currentLevel === 8);
+            const lvl7 = (currentLevel === 7 || currentLevel === 8);
+
+            switch (type) {
+                case 'p':
+                    if (lvl2) {
+                        // Goblin Pawn: 3 Diagonally & 2 Forward. Jumps obstacles.
+                        const forward = isWhite ? -1 : 1;
+                        const goblinVectors = [
+                            [forward * 2, 0], // 2 forward
+                            [forward * 3, 3], // 3 diagonal right
+                            [forward * 3, -3] // 3 diagonal left
+                        ];
+                        goblinVectors.forEach(([dr, dc]) => {
+                            const targetR = r + dr;
+                            const targetC = c + dc;
+                            if (isOnBoard(targetR, targetC)) {
+                                const target = currentBoard[targetR][targetC];
+                                if (!target || (isEnemy(piece, target) && !isSlipped)) {
+                                    moves.push({ fromR: r, fromC: c, toR: targetR, toC: targetC, type: 'normal' });
+                                }
+                            }
+                        });
+                    } else {
+                        // Standard Pawn rules
+                        const dir = isWhite ? -1 : 1;
+                        const startRow = isWhite ? 6 : 1;
+                        if (isOnBoard(r + dir, c) && !currentBoard[r + dir][c]) {
+                            moves.push({ fromR: r, fromC: c, toR: r + dir, toC: c, type: 'normal' });
+                            if (r === startRow && !currentBoard[r + dir * 2][c]) {
+                                moves.push({ fromR: r, fromC: c, toR: r + dir * 2, toC: c, type: 'normal' });
+                            }
+                        }
+                        [-1, 1].forEach(dc => {
+                            if (isOnBoard(r + dir, c + dc)) {
+                                const target = currentBoard[r + dir][c + dc];
+                                if (target && isEnemy(piece, target) && !isSlipped) {
+                                    moves.push({ fromR: r, fromC: c, toR: r + dir, toC: c + dc, type: 'normal' });
+                                }
+                            }
+                        });
+                    }
+                    break;
+
+                case 'r':
+                    processSlidingMoves(r, c, rookDirs, piece, currentBoard, moves, isSlipped);
+                    if (lvl4) {
+                        // Phantom Rook can also leap like a Knight
+                        knightMoves.forEach(([dr, dc]) => {
+                            if (isOnBoard(r + dr, c + dc)) {
+                                const target = currentBoard[r + dr][c + dc];
+                                if (!target || (isEnemy(piece, target) && !isSlipped)) {
+                                    moves.push({ fromR: r, fromC: c, toR: r + dr, toC: c + dc, type: 'normal' });
+                                }
+                            }
+                        });
+                    }
+                    break;
+
+                case 'b':
+                    if (lvl5) {
+                        processBouncingBishops(r, c, bishopDirs, piece, currentBoard, moves, isSlipped);
+                    } else {
+                        processSlidingMoves(r, c, bishopDirs, piece, currentBoard, moves, isSlipped);
+                    }
+                    break;
+
+                case 'q':
+                    if (lvl3) {
+                        // Horse Queen: Moves like Queen + Knight combined
+                        processSlidingMoves(r, c, [...rookDirs, ...bishopDirs], piece, currentBoard, moves, isSlipped);
+                        knightMoves.forEach(([dr, dc]) => {
+                            if (isOnBoard(r + dr, c + dc)) {
+                                const target = currentBoard[r + dr][c + dc];
+                                if (!target || (isEnemy(piece, target) && !isSlipped)) {
+                                    moves.push({ fromR: r, fromC: c, toR: r + dr, toC: c + dc, type: 'normal' });
+                                }
+                            }
+                        });
+                    } else {
+                        processSlidingMoves(r, c, [...rookDirs, ...bishopDirs], piece, currentBoard, moves, isSlipped);
+                    }
+                    break;
 
                 case 'n':
                     knightMoves.forEach(([dr, dc]) => {
@@ -11,6 +444,7 @@
                     break;
 
                 case 'k':
+                    // Standard King movement
                     [...rookDirs, ...bishopDirs].forEach(([dr, dc]) => {
                         if (isOnBoard(r + dr, c + dc)) {
                             const target = currentBoard[r + dr][c + dc];
@@ -19,12 +453,14 @@
                             }
                         }
                     });
+
+                    // Level 7 Sovereign Swap: Can swap with any friendly piece on the board
                     if (lvl7) {
-                        for (let tr = 0; tr < 8; tr++) {
-                            for (let tc = 0; tc < 8; tc++) {
-                                const targetPiece = currentBoard[tr][tc];
+                        for (let targetR = 0; targetR < 8; targetR++) {
+                            for (let targetC = 0; targetC < 8; targetC++) {
+                                const targetPiece = currentBoard[targetR][targetC];
                                 if (targetPiece && !isEnemy(piece, targetPiece) && targetPiece.toLowerCase() !== 'k') {
-                                    moves.push({ fromR: r, fromC: c, toR: tr, toC: tc, type: 'swap' });
+                                    moves.push({ fromR: r, fromC: c, toR: targetR, toC: targetC, type: 'swap' });
                                 }
                             }
                         }
@@ -36,7 +472,7 @@
 
         function processSlidingMoves(r, c, directions, piece, currentBoard, moveList, isSlipped) {
             directions.forEach(([dr, dc]) => {
-                let currR = r + dr, currC = c + dc;
+                let currR = r + dr; let currC = c + dc;
                 while (isOnBoard(currR, currC)) {
                     const target = currentBoard[currR][currC];
                     if (!target) {
@@ -52,25 +488,52 @@
             });
         }
 
+        // Level 5 Wall Bouncing Matrix calculator 
         function processBouncingBishops(r, c, directions, piece, currentBoard, moveList, isSlipped) {
             directions.forEach(([dr, dc]) => {
-                let currR = r + dr, currC = c + dc, currentDr = dr, currentDc = dc, bounceCount = 0;
+                let currR = r + dr;
+                let currC = c + dc;
+                let currentDr = dr;
+                let currentDc = dc;
+                let bounceCount = 0;
+                
+                // Allow up to 2 wall reflections per path trajectory
                 while (bounceCount <= 2) {
                     let hitWall = false;
-                    if (currR < 0 || currR >= 8) { currentDr = -currentDr; currR += currentDr * 2; hitWall = true; }
-                    if (currC < 0 || currC >= 8) { currentDc = -currentDc; currC += currentDc * 2; hitWall = true; }
-                    if (hitWall) { bounceCount++; if (!isOnBoard(currR, currC)) break; }
 
+                    // Out of bounds checks translate directly to reflection triggers
+                    if (currR < 0 || currR >= 8) {
+                        currentDr = -currentDr; 
+                        currR += currentDr * 2;
+                        hitWall = true;
+                    }
+                    if (currC < 0 || currC >= 8) {
+                        currentDc = -currentDc;
+                        currC += currentDc * 2;
+                        hitWall = true;
+                    }
+
+                    if (hitWall) {
+                        bounceCount++;
+                        // If reflection drops the piece back outside boundaries, break the search loop
+                        if (!isOnBoard(currR, currC)) break;
+                    }
+
+                    // Check space configuration post reflection calculation
                     const target = currentBoard[currR][currC];
                     if (!target) {
                         moveList.push({ fromR: r, fromC: c, toR: currR, toC: currC, type: 'normal' });
                     } else {
-                        if ((currR !== r || currC !== c) && isEnemy(piece, target) && !isSlipped) {
-                            moveList.push({ fromR: r, fromC: c, toR: currR, toC: currC, type: 'normal' });
+                        // Prevent stacking multiple moves to the same piece origin space via circular tracking
+                        if (currR !== r || currC !== c) {
+                            if (isEnemy(piece, target) && !isSlipped) {
+                                moveList.push({ fromR: r, fromC: c, toR: currR, toC: currC, type: 'normal' });
+                            }
                         }
                         break;
                     }
-                    currR += currentDr; currC += currentDc;
+                    currR += currentDr;
+                    currC += currentDc;
                 }
             });
         }
@@ -83,55 +546,61 @@
             const activeFreeze = itemSlippedState[move.fromR][move.fromC];
 
             if (move.type === 'swap') {
+                // Execute level 7 position trade
                 const secondaryPiece = targetBoard[move.toR][move.toC];
                 const secondaryFreeze = itemSlippedState[move.toR][move.toC];
+                
                 targetBoard[move.toR][move.toC] = piece;
                 targetBoard[move.fromR][move.fromC] = secondaryPiece;
+                
                 itemSlippedState[move.toR][move.toC] = activeFreeze;
                 itemSlippedState[move.fromR][move.fromC] = secondaryFreeze;
             } else {
+                // Standard structural replacement translation
                 targetBoard[move.toR][move.toC] = piece;
                 targetBoard[move.fromR][move.fromC] = '';
+                
+                // Transfer freeze tracking data to the target coordinates
                 itemSlippedState[move.toR][move.toC] = activeFreeze;
                 itemSlippedState[move.fromR][move.fromC] = null;
 
+                // Handle traditional pawn promotion
                 if (piece === 'P' && move.toR === 0) targetBoard[move.toR][move.toC] = 'Q';
                 if (piece === 'p' && move.toR === 7) targetBoard[move.toR][move.toC] = 'q';
             }
 
+            // Level 6/8 Trap Assessment: Freeze piece if it slides to a slippery ice tile
             if ((currentLevel === 6 || currentLevel === 8) && iceLayout[move.toR][move.toC]) {
-                itemSlippedState[move.toR][move.toC] = targetBoard[move.toR][move.toC] === targetBoard[move.toR][move.toC].toUpperCase() ? 'w' : 'b';
+                const pieceColor = targetBoard[move.toR][move.toC] === targetBoard[move.toR][move.toC].toUpperCase() ? 'w' : 'b';
+                // Value designates active state count: requires 1 full complete turn to wear off
+                itemSlippedState[move.toR][move.toC] = pieceColor;
             }
         }
 
         function processSlipTurnRecovery(color) {
             for (let r = 0; r < 8; r++) {
                 for (let c = 0; c < 8; c++) {
-                    if (itemSlippedState[r][c] === color) itemSlippedState[r][c] = null;
+                    if (itemSlippedState[r][c] === color) {
+                        itemSlippedState[r][c] = null; // Thaw complete
+                    }
                 }
             }
         }
 
         function checkGameEnd() {
-            let wK = false, bK = false;
+            let whiteKingFound = false; let blackKingFound = false;
             for (let r = 0; r < 8; r++) {
                 for (let c = 0; c < 8; c++) {
-                    if (board[r][c] === 'K') wK = true;
-                    if (board[r][c] === 'k') bK = true;
+                    if (board[r][c] === 'K') whiteKingFound = true;
+                    if (board[r][c] === 'k') blackKingFound = true;
                 }
             }
-            if (!wK) { 
-                statusElem.textContent = isAIMode ? "DEFEAT — THE AI TOOK YOUR KING!" : "BLACK WINS! THE WHITE KING HAS BEEN CAPTURED!"; 
-                statusElem.style.color = "#e74c3c"; gameOver = true; return true; 
-            }
-            if (!bK) { 
-                statusElem.textContent = isAIMode ? "VICTORY — YOU CAPTURED THE AI MONARCH!" : "WHITE WINS! THE BLACK KING HAS BEEN CAPTURED!"; 
-                statusElem.style.color = "#f1c40f"; gameOver = true; return true; 
-            }
+            if (!whiteKingFound) { statusElem.textContent = "DEFEAT — THE ENGINE TOOK YOUR KING!"; gameOver = true; return true; }
+            if (!blackKingFound) { statusElem.textContent = "VICTORY — YOU CAPTURED THE GRANDMASTER AI!"; gameOver = true; return true; }
             return false;
         }
 
-        // --- ENGINE COMPUTATION LOGIC ---
+        // --- ENGINE MINIMAX CALCULATOR ---
         function getAllMoves(currentBoard, color) {
             let moves = [];
             for (let r = 0; r < 8; r++) {
@@ -142,7 +611,11 @@
                     }
                 }
             }
-            return moves.sort((a, b) => (currentBoard[b.toR][b.toC] ? 100 : 0) - (currentBoard[a.toR][a.toC] ? 100 : 0));
+            return moves.sort((a, b) => {
+                let valA = currentBoard[a.toR][a.toC] ? 100 : 0;
+                let valB = currentBoard[b.toR][b.toC] ? 100 : 0;
+                return valB - valA;
+            });
         }
 
         function evaluateBoard(currentBoard) {
@@ -152,15 +625,18 @@
                 for (let c = 0; c < 8; c++) {
                     const piece = currentBoard[r][c];
                     if (!piece) continue;
+
                     const isWhite = piece === piece.toUpperCase();
                     const type = piece.toLowerCase();
                     let score = values[type] || 0;
+
                     if (type === 'p') score += isWhite ? pawnPST[r][c] : pawnPST[7 - r][c];
                     else if (type === 'n') score += isWhite ? knightPST[r][c] : knightPST[7 - r][c];
                     else if (type === 'b') score += isWhite ? bishopPST[r][c] : bishopPST[7 - r][c];
                     else if (type === 'r') score += isWhite ? rookPST[r][c] : rookPST[7 - r][c];
                     else if (type === 'q') score += isWhite ? queenPST[r][c] : queenPST[7 - r][c];
                     else if (type === 'k') score += isWhite ? kingPST[r][c] : kingPST[7 - r][c];
+
                     total += isWhite ? score : -score;
                 }
             }
@@ -181,21 +657,25 @@
 
             if (isMaximizing) {
                 let maxEval = -Infinity;
-                for (let move of getAllMoves(currentBoard, 'w')) {
-                    let temp = currentBoard.map(row => [...row]);
-                    executeMove(temp, move);
-                    maxEval = Math.max(maxEval, minimax(temp, depth - 1, alpha, beta, false));
-                    alpha = Math.max(alpha, maxEval);
+                const moves = getAllMoves(currentBoard, 'w');
+                for (let move of moves) {
+                    let tempBoard = currentBoard.map(row => [...row]);
+                    executeMove(tempBoard, move);
+                    let score = minimax(tempBoard, depth - 1, alpha, beta, false);
+                    maxEval = Math.max(maxEval, score);
+                    alpha = Math.max(alpha, score);
                     if (beta <= alpha) break;
                 }
                 return maxEval;
             } else {
                 let minEval = Infinity;
-                for (let move of getAllMoves(currentBoard, 'b')) {
-                    let temp = currentBoard.map(row => [...row]);
-                    executeMove(temp, move);
-                    minEval = Math.min(minEval, minimax(temp, depth - 1, alpha, beta, true));
-                    beta = Math.min(beta, minEval);
+                const moves = getAllMoves(currentBoard, 'b');
+                for (let move of moves) {
+                    let tempBoard = currentBoard.map(row => [...row]);
+                    executeMove(tempBoard, move);
+                    let score = minimax(tempBoard, depth - 1, alpha, beta, true);
+                    minEval = Math.min(minEval, score);
+                    beta = Math.min(beta, score);
                     if (beta <= alpha) break;
                 }
                 return minEval;
@@ -203,32 +683,41 @@
         }
 
         function makeAIMove() {
-            if (gameOver || !isAIMode) return;
             processSlipTurnRecovery('b');
             const moves = getAllMoves(board, 'b');
-            if (moves.length === 0) return;
+            if (moves.length === 0) { statusElem.textContent = "Draw!"; return; }
 
-            let bestMove = moves.find(m => board[m.toR][m.toC] === 'K') || null;
+            const directKill = moves.find(m => board[m.toR][m.toC] === 'K');
+            let bestMove = directKill || null;
 
             if (!bestMove) {
                 let bestScore = Infinity;
+                // Running at lower calculation latency overhead to offset complex branching matrices smoothly
                 let depthLimit = (currentLevel === 5 || currentLevel === 8) ? 2 : 3;
+                
                 for (let move of moves) {
-                    let temp = board.map(row => [...row]);
-                    executeMove(temp, move);
-                    let score = minimax(temp, depthLimit, -Infinity, Infinity, true);
-                    if (score < bestScore) { bestScore = score; bestMove = move; }
+                    let tempBoard = board.map(row => [...row]);
+                    executeMove(tempBoard, move);
+                    let score = minimax(tempBoard, depthLimit, -Infinity, Infinity, true);
+                    if (score < bestScore) {
+                        bestScore = score;
+                        bestMove = move;
+                    }
                 }
             }
 
-            executeMove(board, bestMove || moves[0]);
+            if (!bestMove) bestMove = moves[0];
+
+            executeMove(board, bestMove);
+            drawBoard();
+
             if (!checkGameEnd()) {
                 turn = 'w';
-                updateStatusDisplay();
+                statusElem.textContent = "White's Turn";
             }
-            drawBoard();
         }
 
+        // Run game initialization on startup
         initializeGame();
     </script>
 </body>
