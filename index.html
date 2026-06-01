@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Take King Chess - Offline Edition</title>
+    <title>Take King Chess - Offline Grandmaster Edition</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -198,14 +198,14 @@
 </head>
 <body oncontextmenu="return false;">
 
-    <h1>Take King Chess (Offline Sandbox)</h1>
-    <p>Play locally with a friend on the same computer, or challenge the Grandmaster Tactical AI! Right-click and drag to create strategic planning arrows.</p>
+    <h1>Take King Chess (Brutal Offline Edition)</h1>
+    <p>Warning: The Grandmaster tactical AI now uses recursive multi-turn lookahead engines and deep tactical positioning matrix maps.</p>
     
     <div id="config-panel">
         <div class="config-row">
             <label for="mode-select" style="font-weight: bold;">Opponent Mode: </label>
             <select id="mode-select">
-                <option value="ai">Vs. Grandmaster AI (You are White)</option>
+                <option value="ai">Vs. Tactical AI (Deep Search Hard Mode)</option>
                 <option value="local">Local Pass & Play (Two Players)</option>
             </select>
             <button id="reset-btn" style="padding: 8px 15px; border-radius:4px; border:none; background:#e67e22; color:white; font-weight:bold; cursor:pointer;">Restart Game</button>
@@ -375,7 +375,7 @@
             
             let turnTxt = (turn === 'w') ? "White's Turn" : "Black's Turn";
             if (isAiMode && turn === 'b') {
-                statusElem.textContent = "Grandmaster AI is thinking...";
+                statusElem.textContent = "Grandmaster AI is calculating vectors...";
                 statusElem.style.color = "#e74c3c";
             } else {
                 statusElem.textContent = turnTxt;
@@ -564,14 +564,14 @@
                 let deltaX = toRect.left - fromRect.left;
                 let deltaY = toRect.top - fromRect.top;
 
-                movingPieceElem.style.transition = "transform 0.25s ease-out";
+                movingPieceElem.style.transition = "transform 0.22s ease-out";
                 
                 let targetPieceElem = toCell.querySelector('.piece');
                 if (move.type === 'swap' && targetPieceElem) {
-                    targetPieceElem.style.transition = "transform 0.25s ease-out";
+                    targetPieceElem.style.transition = "transform 0.22s ease-out";
                     targetPieceElem.style.transform = `translate(${-deltaX}px, ${-deltaY}px)`;
                 } else if (targetPieceElem) {
-                    targetPieceElem.style.transition = "opacity 0.15s ease";
+                    targetPieceElem.style.transition = "opacity 0.12s ease";
                     targetPieceElem.style.opacity = "0";
                 }
 
@@ -605,7 +605,7 @@
                 drawBoard();
 
                 if (isAiMode && turn === 'b') {
-                    setTimeout(() => { triggerAiCalculation(); }, 400);
+                    setTimeout(() => { triggerAiCalculation(); }, 200);
                 }
             } else {
                 activateReplayEngine();
@@ -820,7 +820,7 @@
             const piece = targetBoard[move.fromR][move.fromC];
             const originalSlipped = itemSlippedState[move.fromR][move.fromC];
             
-            if (move.type === 'swap') {
+            if (move.type === 'swap' && targetBoard[move.toR][move.toC]) {
                 const targetPiece = targetBoard[move.toR][move.toC];
                 const targetSlipped = itemSlippedState[move.toR][move.toC];
                 
@@ -877,89 +877,144 @@
             return false;
         }
 
-        /* ---------------- GRANDMASTER TACTICAL AI SYSTEM ---------------- */
+        /* ---------------- ADVANCED MINIMAX LOOKAHEAD ENGINE ---------------- */
+        const pieceWeight = { 'p': 10, 'n': 40, 'b': 42, 'r': 60, 'q': 115, 'g': 50, 'k': 50000 };
+
         function triggerAiCalculation() {
             if (gameOver) return;
             
-            let allAiMoves = [];
-            for (let r = 0; r < boardSize; r++) {
-                for (let c = 0; c < boardSize; c++) {
-                    let piece = board[r][c];
-                    if (piece && piece === piece.toLowerCase() && itemSlippedState[r][c] === null) {
-                        let legal = getLegalMoves(r, c, board);
-                        allAiMoves = allAiMoves.concat(legal);
-                    }
-                }
-            }
-
-            if (allAiMoves.length === 0) {
-                // Out of options, skip turn
+            // Generate root options for black
+            let rootMoves = getAllMovesForSide(board, 'b');
+            if (rootMoves.length === 0) {
                 turn = 'w';
                 updateStatusMessage();
                 return;
             }
 
-            // Valuation Matrices
-            const pieceValues = { 'p': 10, 'n': 35, 'b': 35, 'r': 50, 'q': 100, 'g': 45, 'k': 20000 };
-            
-            let premiumMove = null;
-            let highestScore = -Infinity;
+            let optimumMove = null;
+            let supremeScore = -Infinity;
 
-            // Score evaluation
-            allAiMoves.forEach(move => {
-                let currentScore = 0;
-                const targetSquare = board[move.toR][move.toC];
+            // Deep alphabeta structured minimax calculation
+            for (let i = 0; i < rootMoves.length; i++) {
+                let currentMove = rootMoves[i];
                 
-                // 1. Immediate capture payoff
-                if (targetSquare) {
-                    currentScore += pieceValues[targetSquare.toLowerCase()] * 12;
+                // Instantly execute victory if regicide is clear
+                let initialTarget = board[currentMove.toR][currentMove.toC];
+                if (initialTarget === 'K') {
+                    optimumMove = currentMove;
+                    break;
                 }
 
-                // Simulate state to calculate safety profile
-                let simulatedBoard = board.map(row => [...row]);
-                simulatedBoard[move.toR][move.toC] = simulatedBoard[move.fromR][move.fromC];
-                simulatedBoard[move.fromR][move.fromC] = '';
+                // Simulate board branch
+                let ghostBoard = board.map(row => [...row]);
+                ghostBoard[currentMove.toR][currentMove.toC] = ghostBoard[currentMove.fromR][currentMove.fromC];
+                ghostBoard[currentMove.fromR][currentMove.fromC] = '';
 
-                // 2. Positional Development
-                if (move.toR >= (boardSize/2 - 1) && move.toR <= (boardSize/2 + 1)) currentScore += 2; // Center row control
-                if (board[move.fromR][move.fromC] === 'p' && move.toR > move.fromR) currentScore += 1; // Pawn pushing
+                // Run alpha-beta lookahead depth 2
+                let evaluationScore = minimaxSearch(ghostBoard, 2, -Infinity, Infinity, false);
+                
+                // Positional bias tuning for root selection
+                if (currentMove.toR >= (boardSize / 2 - 1) && currentMove.toR <= (boardSize / 2 + 1)) evaluationScore += 0.4;
+                if (board[currentMove.fromR][currentMove.fromC] === 'p') evaluationScore += (currentMove.toR * 0.15); // Push forward
 
-                // 3. Safety Lookahead Check (Prevent stepping directly into a trap)
-                let immediateDanger = false;
-                for (let opponentR = 0; opponentR < boardSize; opponentR++) {
-                    for (let opponentC = 0; opponentC < boardSize; opponentC++) {
-                        let oppPiece = simulatedBoard[opponentR][opponentC];
-                        if (oppPiece && oppPiece === oppPiece.toUpperCase()) {
-                            let counterMoves = getLegalMoves(opponentR, opponentC, simulatedBoard);
-                            if (counterMoves.some(cm => cm.toR === move.toR && cm.toC === move.toC)) {
-                                immediateDanger = true;
-                            }
-                        }
-                    }
+                if (evaluationScore > supremeScore) {
+                    supremeScore = evaluationScore;
+                    optimumMove = currentMove;
                 }
+            }
 
-                if (immediateDanger) {
-                    currentScore -= pieceValues[board[move.fromR][move.fromC].toLowerCase()] * 5;
-                }
-
-                // Add slight randomness to ensure natural variance
-                currentScore += Math.random() * 3;
-
-                if (currentScore > highestScore) {
-                    highestScore = currentScore;
-                    premiumMove = move;
-                }
-            });
-
-            if (!premiumMove) {
-                premiumMove = allAiMoves[Math.floor(Math.random() * allAiMoves.length)];
+            if (!optimumMove) {
+                optimumMove = rootMoves[Math.floor(Math.random() * rootMoves.length)];
             }
 
             processSlipTurnRecovery('b');
-            animateAndExecuteMove(premiumMove);
+            animateAndExecuteMove(optimumMove);
         }
 
-        /* ---------------- LOCAL REPLAY CONTROLS ---------------- */
+        function minimaxSearch(virtualBoard, depth, alpha, beta, maximizingSide) {
+            // Baseline status verification
+            let wk = false, bk = false;
+            for(let r=0; r<boardSize; r++) {
+                for(let c=0; c<boardSize; c++) {
+                    if (virtualBoard[r][c] === 'K') wk = true;
+                    if (virtualBoard[r][c] === 'k') bk = true;
+                }
+            }
+            if (!wk) return 99999;
+            if (!bk) return -99999;
+            if (depth === 0) return staticallyEvaluateBoard(virtualBoard);
+
+            if (maximizingSide) {
+                let moves = getAllMovesForSide(virtualBoard, 'b');
+                if (moves.length === 0) return staticallyEvaluateBoard(virtualBoard);
+                let highestValue = -Infinity;
+                for (let i = 0; i < moves.length; i++) {
+                    let bCopy = virtualBoard.map(row => [...row]);
+                    bCopy[moves[i].toR][moves[i].toC] = bCopy[moves[i].fromR][moves[i].fromC];
+                    bCopy[moves[i].fromR][moves[i].fromC] = '';
+                    highestValue = Math.max(highestValue, minimaxSearch(bCopy, depth - 1, alpha, beta, false));
+                    alpha = Math.max(alpha, highestValue);
+                    if (beta <= alpha) break;
+                }
+                return highestValue;
+            } else {
+                let moves = getAllMovesForSide(virtualBoard, 'w');
+                if (moves.length === 0) return staticallyEvaluateBoard(virtualBoard);
+                let lowestValue = Infinity;
+                for (let i = 0; i < moves.length; i++) {
+                    let bCopy = virtualBoard.map(row => [...row]);
+                    bCopy[moves[i].toR][moves[i].toC] = bCopy[moves[i].fromR][moves[i].fromC];
+                    bCopy[moves[i].fromR][moves[i].fromC] = '';
+                    lowestValue = Math.min(lowestValue, minimaxSearch(bCopy, depth - 1, alpha, beta, true));
+                    beta = Math.min(beta, lowestValue);
+                    if (beta <= alpha) break;
+                }
+                return lowestValue;
+            }
+        }
+
+        function staticallyEvaluateBoard(vBoard) {
+            let runningSum = 0;
+            for (let r = 0; r < boardSize; r++) {
+                for (let c = 0; c < boardSize; c++) {
+                    let piece = vBoard[r][c];
+                    if (piece) {
+                        let type = piece.toLowerCase();
+                        let numericalVal = pieceWeight[type] || 0;
+                        
+                        // Add coordinate control bonuses
+                        if (r >= 2 && r <= boardSize-3 && c >= 2 && c <= boardSize-3) {
+                            numericalVal += 0.5; // Center positional score
+                        }
+
+                        if (piece === piece.toLowerCase()) {
+                            runningSum += numericalVal; // Black (AI)
+                        } else {
+                            runningSum -= numericalVal; // White (Player)
+                        }
+                    }
+                }
+            }
+            return runningSum;
+        }
+
+        function getAllMovesForSide(vBoard, side) {
+            let compositeList = [];
+            for (let r = 0; r < boardSize; r++) {
+                for (let c = 0; c < boardSize; c++) {
+                    let piece = vBoard[r][c];
+                    if (piece) {
+                        let matchesSide = (side === 'w') ? (piece === piece.toUpperCase()) : (piece === piece.toLowerCase());
+                        if (matchesSide && itemSlippedState[r][c] === null) {
+                            compositeList = compositeList.concat(getLegalMoves(r, c, vBoard));
+                        }
+                    }
+                }
+            }
+            return compositeList;
+        }
+
+        /* ---------------- LOCAL REPLAY ENGINE CONTROLS ---------------- */
         function activateReplayEngine() {
             isReplaying = true;
             replayIndex = gameHistory.length - 1;
@@ -989,7 +1044,6 @@
         btnNext.addEventListener('click', () => { if (replayIndex < gameHistory.length - 1) { replayIndex++; updateReplayView(); } });
         btnLast.addEventListener('click', () => { replayIndex = gameHistory.length - 1; updateReplayView(); });
 
-        // Spin Engine Up
         initializeGame();
     </script>
 </body>
