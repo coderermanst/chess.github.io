@@ -299,7 +299,7 @@
             6: "Level 6: Perilous Ice. Random tiles look slippery. Landing freezes pieces: they cannot capture and require 1 turn to stabilize.",
             7: "Level 7: Sovereign Swap. The Monarch rules space, enjoying capability to swap coordinate matrices safely with any ally.",
             8: "Level 8: Blitz Chargers. Horses harness double energy output, allowing them to jump twice as far as traditional Knights.",
-            9: "Level 9: The Grand Arena. Grid size safely expands to 10x10. Introduces the Guardian (G), who drops out of nowhere directly in front of your own pieces.",
+            9: "Level 9: The Grand Arena. Grid size safely expands to 10x10. Introduces the Guardian (G), who drops out of nowhere directly in front of your own pieces and can take enemy units.",
             10: "Level 10: Absolute Armageddon! All structural rules, variant configurations, and size scales mesh into one singular sandbox."
         };
 
@@ -464,7 +464,6 @@
 
         modeSelect.addEventListener('change', () => { initializeGame(); });
         
-        // Dynamic Difficulty update context without resetting map matrices completely
         aiDiffSelect.addEventListener('change', () => { 
             if (isAiMode && turn === 'b' && !gameOver && !isAnimating && !isReplaying) {
                 triggerAiCalculation();
@@ -751,7 +750,7 @@
                         if (isOnBoard(r + dr, c + dc)) {
                             const target = currentBoard[r + dr][c + dc];
                             if (!target || isEnemy(piece, target)) {
-                                moves.push({ fromR: r, fromC: c, toR: r + dr, toC: c + dc, type: 'normal' });
+                                    moves.push({ fromR: r, fromC: c, toR: r + dr, toC: c + dc, type: 'normal' });
                             }
                         }
                     });
@@ -787,9 +786,13 @@
                                 const frontOffset = targetIsWhite ? -1 : 1; 
                                 const frontR = tr + frontOffset;
                                 
-                                if (isOnBoard(frontR, tc) && !currentBoard[frontR][tc]) {
-                                    if (!moves.some(m => m.toR === frontR && m.toC === tc)) {
-                                        moves.push({ fromR: r, fromC: c, toR: frontR, toC: tc, type: 'normal' });
+                                if (isOnBoard(frontR, tc)) {
+                                    const squareContent = currentBoard[frontR][tc];
+                                    // Can deploy to empty spaces OR take enemy pieces occupying those tiles
+                                    if (!squareContent || isEnemy(piece, squareContent)) {
+                                        if (!moves.some(m => m.toR === frontR && m.toC === tc)) {
+                                            moves.push({ fromR: r, fromC: c, toR: frontR, toC: tc, type: 'normal' });
+                                        }
                                     }
                                 }
                             }
@@ -931,11 +934,9 @@
             const difficulty = aiDiffSelect.value;
             let chosenMove = null;
 
-            // 1. NOVICE DIFFICULTY: Completely random actions
             if (difficulty === 'novice') {
                 chosenMove = rootMoves[Math.floor(Math.random() * rootMoves.length)];
             }
-            // 2. CASUAL DIFFICULTY: Zero foresight lookahead, captures pieces immediately if presented
             else if (difficulty === 'casual') {
                 let highestImmediateValue = -Infinity;
                 let topCasualMoves = [];
@@ -952,7 +953,6 @@
                 });
                 chosenMove = topCasualMoves[Math.floor(Math.random() * topCasualMoves.length)];
             }
-            // 3 & 4. DEEP SEARCH MODES (Master Depth 3 / Grandmaster Depth 4)
             else {
                 let searchDepth = (difficulty === 'grandmaster') ? 4 : 3;
                 let supremeScore = -Infinity;
@@ -961,7 +961,6 @@
                 for (let i = 0; i < rootMoves.length; i++) {
                     let currentMove = rootMoves[i];
                     
-                    // Instant tactical win if king capture is viable
                     if (board[currentMove.toR][currentMove.toC] === 'K') {
                         chosenMove = currentMove;
                         break;
@@ -973,7 +972,6 @@
 
                     let evaluationScore = minimaxSearch(ghostBoard, searchDepth - 1, -Infinity, Infinity, false);
                     
-                    // Positional Bias Tweak
                     if (currentMove.toR >= (boardSize / 2 - 1) && currentMove.toR <= (boardSize / 2 + 1)) evaluationScore += 0.3;
                     if (board[currentMove.fromR][currentMove.fromC] === 'p') evaluationScore += (currentMove.toR * 0.1); 
 
@@ -1006,7 +1004,7 @@
                     if (virtualBoard[r][c] === 'k') bk = true;
                 }
             }
-            if (!wk) return 99999 + depth; // Reward speed of capturing the king
+            if (!wk) return 99999 + depth; 
             if (!bk) return -99999 - depth;
             if (depth === 0) return staticallyEvaluateBoard(virtualBoard);
 
@@ -1048,15 +1046,14 @@
                         let type = piece.toLowerCase();
                         let numericalVal = pieceWeight[type] || 0;
                         
-                        // Positional matrix mapping adjustments
                         if (r >= 2 && r <= boardSize-3 && c >= 2 && c <= boardSize-3) {
                             numericalVal += 0.5; 
                         }
 
                         if (piece === piece.toLowerCase()) {
-                            runningSum += numericalVal; // Black AI
+                            runningSum += numericalVal; 
                         } else {
-                            runningSum -= numericalVal; // White Player
+                            runningSum -= numericalVal; 
                         }
                     }
                 }
