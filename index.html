@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Take King Chess - Offline Grandmaster Edition</title>
+    <title>Take King Chess - Ultimate Sandbox Edition</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -25,27 +25,38 @@
             border-radius: 8px;
             margin-bottom: 15px;
             width: 520px;
-            text-align: center;
             box-sizing: border-box;
             box-shadow: 0 4px 10px rgba(0,0,0,0.3);
         }
         .config-row {
             display: flex;
-            justify-content: center;
-            gap: 15px;
+            justify-content: space-between;
             margin: 8px 0;
             align-items: center;
+            gap: 10px;
+        }
+        .config-group {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+        }
+        .config-group label {
+            font-size: 0.85rem;
+            color: #bdc3c7;
+            margin-bottom: 4px;
+            font-weight: bold;
         }
         select {
             padding: 8px;
             border-radius: 4px;
             border: none;
-            width: 220px;
+            width: 100%;
             font-size: 0.9rem;
             background: #ecf0f1;
             color: #2c3e50;
             font-weight: bold;
             cursor: pointer;
+            box-sizing: border-box;
         }
 
         #level-container {
@@ -198,17 +209,28 @@
 </head>
 <body oncontextmenu="return false;">
 
-    <h1>Take King Chess (Brutal Offline Edition)</h1>
-    <p>Warning: The Grandmaster tactical AI now uses recursive multi-turn lookahead engines and deep tactical positioning matrix maps.</p>
+    <h1>Take King Chess</h1>
+    <p>Choose your ruleset via the slider, then pit yourself against multiple tiers of tactical AI optimization matrices.</p>
     
     <div id="config-panel">
         <div class="config-row">
-            <label for="mode-select" style="font-weight: bold;">Opponent Mode: </label>
-            <select id="mode-select">
-                <option value="ai">Vs. Tactical AI (Deep Search Hard Mode)</option>
-                <option value="local">Local Pass & Play (Two Players)</option>
-            </select>
-            <button id="reset-btn" style="padding: 8px 15px; border-radius:4px; border:none; background:#e67e22; color:white; font-weight:bold; cursor:pointer;">Restart Game</button>
+            <div class="config-group">
+                <label for="mode-select">Opponent Mode</label>
+                <select id="mode-select">
+                    <option value="ai">Vs. Computer AI</option>
+                    <option value="local">Local Pass & Play</option>
+                </select>
+            </div>
+            <div class="config-group" id="ai-difficulty-group">
+                <label for="ai-diff-select">AI Difficulty</label>
+                <select id="ai-diff-select">
+                    <option value="novice">Novice (Random Moves)</option>
+                    <option value="casual">Casual (Immediate Threat Only)</option>
+                    <option value="master" selected>Master (Depth 3 Search)</option>
+                    <option value="grandmaster">Grandmaster (Depth 4 Deep Engine)</option>
+                </select>
+            </div>
+            <button id="reset-btn" style="padding: 8px 15px; height: 36px; margin-top: 18px; border-radius:4px; border:none; background:#e67e22; color:white; font-weight:bold; cursor:pointer; white-space: nowrap;">Restart Game</button>
         </div>
     </div>
 
@@ -248,6 +270,8 @@
         const levelValDisplay = document.getElementById('level-val');
         const levelDescDisplay = document.getElementById('level-desc');
         const modeSelect = document.getElementById('mode-select');
+        const aiDiffSelect = document.getElementById('ai-diff-select');
+        const aiDifficultyGroup = document.getElementById('ai-difficulty-group');
         const resetBtn = document.getElementById('reset-btn');
         const arrowSvg = document.getElementById('arrow-svg');
 
@@ -307,6 +331,12 @@
         function initializeGame() {
             boardSize = (currentLevel === 9 || currentLevel === 10) ? 10 : 8;
             isAiMode = (modeSelect.value === 'ai');
+            
+            if (isAiMode) {
+                aiDifficultyGroup.style.display = 'flex';
+            } else {
+                aiDifficultyGroup.style.display = 'none';
+            }
 
             boardElem.style.gridTemplateColumns = `repeat(${boardSize}, 60px)`;
             boardElem.style.gridTemplateRows = `repeat(${boardSize}, 60px)`;
@@ -375,7 +405,7 @@
             
             let turnTxt = (turn === 'w') ? "White's Turn" : "Black's Turn";
             if (isAiMode && turn === 'b') {
-                statusElem.textContent = "Grandmaster AI is calculating vectors...";
+                statusElem.textContent = "Computer is calculating options...";
                 statusElem.style.color = "#e74c3c";
             } else {
                 statusElem.textContent = turnTxt;
@@ -433,6 +463,14 @@
         });
 
         modeSelect.addEventListener('change', () => { initializeGame(); });
+        
+        // Dynamic Difficulty update context without resetting map matrices completely
+        aiDiffSelect.addEventListener('change', () => { 
+            if (isAiMode && turn === 'b' && !gameOver && !isAnimating && !isReplaying) {
+                triggerAiCalculation();
+            }
+        });
+        
         resetBtn.addEventListener('click', () => { initializeGame(); });
 
         function onDragStart(e, r, c) {
@@ -877,13 +915,12 @@
             return false;
         }
 
-        /* ---------------- ADVANCED MINIMAX LOOKAHEAD ENGINE ---------------- */
+        /* ---------------- DYNAMIC AI ENGINE TIERS ---------------- */
         const pieceWeight = { 'p': 10, 'n': 40, 'b': 42, 'r': 60, 'q': 115, 'g': 50, 'k': 50000 };
 
         function triggerAiCalculation() {
             if (gameOver) return;
             
-            // Generate root options for black
             let rootMoves = getAllMovesForSide(board, 'b');
             if (rootMoves.length === 0) {
                 turn = 'w';
@@ -891,48 +928,77 @@
                 return;
             }
 
-            let optimumMove = null;
-            let supremeScore = -Infinity;
+            const difficulty = aiDiffSelect.value;
+            let chosenMove = null;
 
-            // Deep alphabeta structured minimax calculation
-            for (let i = 0; i < rootMoves.length; i++) {
-                let currentMove = rootMoves[i];
+            // 1. NOVICE DIFFICULTY: Completely random actions
+            if (difficulty === 'novice') {
+                chosenMove = rootMoves[Math.floor(Math.random() * rootMoves.length)];
+            }
+            // 2. CASUAL DIFFICULTY: Zero foresight lookahead, captures pieces immediately if presented
+            else if (difficulty === 'casual') {
+                let highestImmediateValue = -Infinity;
+                let topCasualMoves = [];
                 
-                // Instantly execute victory if regicide is clear
-                let initialTarget = board[currentMove.toR][currentMove.toC];
-                if (initialTarget === 'K') {
-                    optimumMove = currentMove;
-                    break;
+                rootMoves.forEach(m => {
+                    let target = board[m.toR][m.toC];
+                    let currentScore = target ? (pieceWeight[target.toLowerCase()] || 0) : 0;
+                    if (currentScore > highestImmediateValue) {
+                        highestImmediateValue = currentScore;
+                        topCasualMoves = [m];
+                    } else if (currentScore === highestImmediateValue) {
+                        topCasualMoves.push(m);
+                    }
+                });
+                chosenMove = topCasualMoves[Math.floor(Math.random() * topCasualMoves.length)];
+            }
+            // 3 & 4. DEEP SEARCH MODES (Master Depth 3 / Grandmaster Depth 4)
+            else {
+                let searchDepth = (difficulty === 'grandmaster') ? 4 : 3;
+                let supremeScore = -Infinity;
+                let bestMovesGroup = [];
+
+                for (let i = 0; i < rootMoves.length; i++) {
+                    let currentMove = rootMoves[i];
+                    
+                    // Instant tactical win if king capture is viable
+                    if (board[currentMove.toR][currentMove.toC] === 'K') {
+                        chosenMove = currentMove;
+                        break;
+                    }
+
+                    let ghostBoard = board.map(row => [...row]);
+                    ghostBoard[currentMove.toR][currentMove.toC] = ghostBoard[currentMove.fromR][currentMove.fromC];
+                    ghostBoard[currentMove.fromR][currentMove.fromC] = '';
+
+                    let evaluationScore = minimaxSearch(ghostBoard, searchDepth - 1, -Infinity, Infinity, false);
+                    
+                    // Positional Bias Tweak
+                    if (currentMove.toR >= (boardSize / 2 - 1) && currentMove.toR <= (boardSize / 2 + 1)) evaluationScore += 0.3;
+                    if (board[currentMove.fromR][currentMove.fromC] === 'p') evaluationScore += (currentMove.toR * 0.1); 
+
+                    if (evaluationScore > supremeScore) {
+                        supremeScore = evaluationScore;
+                        bestMovesGroup = [currentMove];
+                    } else if (evaluationScore === supremeScore) {
+                        bestMovesGroup.push(currentMove);
+                    }
                 }
-
-                // Simulate board branch
-                let ghostBoard = board.map(row => [...row]);
-                ghostBoard[currentMove.toR][currentMove.toC] = ghostBoard[currentMove.fromR][currentMove.fromC];
-                ghostBoard[currentMove.fromR][currentMove.fromC] = '';
-
-                // Run alpha-beta lookahead depth 2
-                let evaluationScore = minimaxSearch(ghostBoard, 2, -Infinity, Infinity, false);
                 
-                // Positional bias tuning for root selection
-                if (currentMove.toR >= (boardSize / 2 - 1) && currentMove.toR <= (boardSize / 2 + 1)) evaluationScore += 0.4;
-                if (board[currentMove.fromR][currentMove.fromC] === 'p') evaluationScore += (currentMove.toR * 0.15); // Push forward
-
-                if (evaluationScore > supremeScore) {
-                    supremeScore = evaluationScore;
-                    optimumMove = currentMove;
+                if (!chosenMove && bestMovesGroup.length > 0) {
+                    chosenMove = bestMovesGroup[Math.floor(Math.random() * bestMovesGroup.length)];
                 }
             }
 
-            if (!optimumMove) {
-                optimumMove = rootMoves[Math.floor(Math.random() * rootMoves.length)];
+            if (!chosenMove) {
+                chosenMove = rootMoves[Math.floor(Math.random() * rootMoves.length)];
             }
 
             processSlipTurnRecovery('b');
-            animateAndExecuteMove(optimumMove);
+            animateAndExecuteMove(chosenMove);
         }
 
         function minimaxSearch(virtualBoard, depth, alpha, beta, maximizingSide) {
-            // Baseline status verification
             let wk = false, bk = false;
             for(let r=0; r<boardSize; r++) {
                 for(let c=0; c<boardSize; c++) {
@@ -940,8 +1006,8 @@
                     if (virtualBoard[r][c] === 'k') bk = true;
                 }
             }
-            if (!wk) return 99999;
-            if (!bk) return -99999;
+            if (!wk) return 99999 + depth; // Reward speed of capturing the king
+            if (!bk) return -99999 - depth;
             if (depth === 0) return staticallyEvaluateBoard(virtualBoard);
 
             if (maximizingSide) {
@@ -982,15 +1048,15 @@
                         let type = piece.toLowerCase();
                         let numericalVal = pieceWeight[type] || 0;
                         
-                        // Add coordinate control bonuses
+                        // Positional matrix mapping adjustments
                         if (r >= 2 && r <= boardSize-3 && c >= 2 && c <= boardSize-3) {
-                            numericalVal += 0.5; // Center positional score
+                            numericalVal += 0.5; 
                         }
 
                         if (piece === piece.toLowerCase()) {
-                            runningSum += numericalVal; // Black (AI)
+                            runningSum += numericalVal; // Black AI
                         } else {
-                            runningSum -= numericalVal; // White (Player)
+                            runningSum -= numericalVal; // White Player
                         }
                     }
                 }
@@ -1014,7 +1080,7 @@
             return compositeList;
         }
 
-        /* ---------------- LOCAL REPLAY ENGINE CONTROLS ---------------- */
+        /* ---------------- MATCH HISTORY GAMEPLAY REPLAY CONTROLS ---------------- */
         function activateReplayEngine() {
             isReplaying = true;
             replayIndex = gameHistory.length - 1;
