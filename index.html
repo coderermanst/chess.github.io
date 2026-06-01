@@ -98,7 +98,7 @@
         #chessboard {
             display: grid;
             border: 5px solid #34495e;
-            box-shadow: 0 12px 28px rgba(0,0,0,0.4);
+            box-shadow: 0 12px 28 rgba(0,0,0,0.4);
         }
 
         #arrow-svg {
@@ -293,8 +293,8 @@
         const levelDescriptions = {
             1: "Level 1: Normal Chess. Standard movement rules apply.",
             2: "Level 2: Goblin Pawns! Pawns move 1 or 2 squares forward or diagonally, jumping completely over obstacles.",
-            3: "Level 3: Horse Queens. The traditional Queen transforms completely into an agile Knight-Queen compound construct.",
-            4: "Level 4: Phantom Rooks. Heavy Siege Castles gain the dimensional ability to jump obstacles natively like Knights.",
+            3: "Level 3: Horse Queens. The traditional Queen transforms completely into a standard Knight movement layout.",
+            4: "Level 4: Phantom Rooks. Heavy Siege Castles alter form, moving exactly like traditional standard Knights.",
             5: "Level 5: Kinetic Bishops. Clergy track vectors that rebound off the boundaries of the board matrix to bank paths.",
             6: "Level 6: Perilous Ice. Random tiles look slippery. Landing freezes pieces: they cannot capture and require 1 turn to stabilize.",
             7: "Level 7: Sovereign Swap. The Monarch rules space, enjoying capability to swap coordinate matrices safely with any ally.",
@@ -675,6 +675,8 @@
             const lvl7 = (currentLevel === 7 || currentLevel === 10);
             const lvl8 = (currentLevel === 8 || currentLevel === 10);
 
+            // Fetch blitz horse extension only if level 8 is running
+            let cleanStandardOffsets = [...knightOffsets];
             if (lvl8) {
                 knightOffsets = knightOffsets.concat([[4,2],[4,-2],[-4,2],[-4,-2],[2,4],[2,-4],[-2,4],[-2,-4]]);
             }
@@ -713,9 +715,9 @@
                     break;
 
                 case 'r':
-                    processSlidingMoves(r, c, rookDirs, piece, currentBoard, moves);
                     if (lvl4) {
-                        knightOffsets.forEach(([dr, dc]) => {
+                        // Level 4 Rooks shift entirely into traditional normal horses
+                        cleanStandardOffsets.forEach(([dr, dc]) => {
                             if (isOnBoard(r + dr, c + dc)) {
                                 const target = currentBoard[r + dr][c + dc];
                                 if (!target || isEnemy(piece, target)) {
@@ -723,6 +725,8 @@
                                 }
                             }
                         });
+                    } else {
+                        processSlidingMoves(r, c, rookDirs, piece, currentBoard, moves);
                     }
                     break;
 
@@ -732,9 +736,9 @@
                     break;
 
                 case 'q':
-                    processSlidingMoves(r, c, [...rookDirs, ...bishopDirs], piece, currentBoard, moves);
                     if (lvl3) {
-                        knightOffsets.forEach(([dr, dc]) => {
+                        // Level 3 Queens shift entirely into traditional normal horses
+                        cleanStandardOffsets.forEach(([dr, dc]) => {
                             if (isOnBoard(r + dr, c + dc)) {
                                 const target = currentBoard[r + dr][c + dc];
                                 if (!target || isEnemy(piece, target)) {
@@ -742,6 +746,8 @@
                                 }
                             }
                         });
+                    } else {
+                        processSlidingMoves(r, c, [...rookDirs, ...bishopDirs], piece, currentBoard, moves);
                     }
                     break;
 
@@ -788,7 +794,6 @@
                                 
                                 if (isOnBoard(frontR, tc)) {
                                     const squareContent = currentBoard[frontR][tc];
-                                    // Can deploy to empty spaces OR take enemy pieces occupying those tiles
                                     if (!squareContent || isEnemy(piece, squareContent)) {
                                         if (!moves.some(m => m.toR === frontR && m.toC === tc)) {
                                             moves.push({ fromR: r, fromC: c, toR: frontR, toC: tc, type: 'normal' });
@@ -854,6 +859,7 @@
             });
         }
 
+        fn = (r, c) => r >= 0 && r < boardSize && c >= 0 && c < boardSize;
         function isOnBoard(r, c) { return r >= 0 && r < boardSize && c >= 0 && c < boardSize; }
         function isEnemy(p1, p2) { return (p1 === p1.toUpperCase()) !== (p2 === p2.toUpperCase()); }
 
