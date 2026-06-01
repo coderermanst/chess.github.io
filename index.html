@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Take King Chess - Chaos Mode</title>
+    <title>Take King Chess - Offline Edition</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -19,93 +19,101 @@
         h1 { margin-bottom: 5px; }
         p { margin-top: 0; color: #bdc3c7; text-align: center; max-width: 500px;}
         
-        /* Control Panel Layout */
-        #control-panel {
+        #config-panel {
+            background-color: #34495e;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            width: 520px;
+            text-align: center;
+            box-sizing: border-box;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+        .config-row {
             display: flex;
-            flex-direction: column;
+            justify-content: center;
+            gap: 15px;
+            margin: 8px 0;
             align-items: center;
-            gap: 12px;
+        }
+        select {
+            padding: 8px;
+            border-radius: 4px;
+            border: none;
+            width: 220px;
+            font-size: 0.9rem;
+            background: #ecf0f1;
+            color: #2c3e50;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        #level-container {
             background-color: #34495e;
             padding: 15px 25px;
             border-radius: 8px;
             margin-bottom: 15px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-            width: 480px;
-            transition: transform 0.2s ease;
+            text-align: center;
+            width: 520px;
+            box-sizing: border-box;
         }
-        
-        /* Mode Toggle Button */
-        #mode-toggle {
-            background-color: #e67e22;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            font-size: 1rem;
-            font-weight: bold;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            box-shadow: 0 3px 0 #d35400;
-        }
-        #mode-toggle:hover { background-color: #f39c12; transform: scale(1.02); }
-        #mode-toggle:active { transform: translateY(3px); box-shadow: none; }
-
         #level-slider {
             width: 100%;
-            margin: 5px 0;
+            margin: 10px 0;
             cursor: pointer;
-            transition: transform 0.1s ease;
         }
-        #level-slider:active { transform: scaleY(1.1); }
-
         #level-desc {
             font-size: 0.95rem;
             color: #f1c40f;
             min-height: 40px;
             font-weight: bold;
-            text-align: center;
-            transition: color 0.3s ease;
         }
 
         #status {
-            font-size: 1.4rem;
+            font-size: 1.3rem;
             margin-bottom: 15px;
             font-weight: bold;
             color: #2ecc71;
-            padding: 5px 15px;
+            background-color: #34495e;
+            padding: 6px 20px;
             border-radius: 4px;
-            text-align: center;
-            transition: color 0.3s ease;
         }
-        .white-turn { color: #ffffff !important; }
-        .black-turn { color: #111111 !important; text-shadow: 0 0 10px rgba(0,0,0,0.5); }
+        
+        #board-wrapper {
+            position: relative;
+        }
 
         #chessboard {
             display: grid;
-            grid-template-columns: repeat(8, 65px);
-            grid-template-rows: repeat(8, 65px);
             border: 5px solid #34495e;
             box-shadow: 0 12px 28px rgba(0,0,0,0.4);
-            position: relative;
-            background-color: #88929a;
         }
+
+        #arrow-svg {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            pointer-events: none;
+            z-index: 5;
+        }
+
         .cell {
-            width: 65px;
-            height: 65px;
+            width: 60px;
+            height: 60px;
             display: flex;
             justify-content: center;
             align-items: center;
-            font-size: 42px;
+            font-size: 38px;
             cursor: pointer;
             position: relative;
-            transition: background-color 0.2s ease;
         }
         .light { background-color: #e0e4e8; }
         .dark { background-color: #88929a; }
         
         .slippery::after {
             content: '🧊';
-            font-size: 14px;
+            font-size: 12px;
             position: absolute;
             top: 2px;
             right: 2px;
@@ -123,47 +131,39 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            z-index: 3;
+            z-index: 10;
             cursor: grab;
-            animation: slideIn 0.2s cubic-bezier(0.25, 1, 0.5, 1) forwards;
-            transition: transform 0.15s ease, filter 0.15s ease;
+            position: relative;
         }
-        .piece:hover {
-            transform: scale(1.05);
-        }
+        .piece:active { cursor: grabbing; }
         
         .piece-w { color: #ffffff; filter: drop-shadow(0px 2px 2px rgba(0,0,0,0.75)); }
         .piece-b { color: #111111; filter: drop-shadow(0px 2px 2px rgba(255,255,255,0.2)); }
         
-        /* Highlight States */
-        .selected { 
-            background-color: #2ecc71 !important; 
-            box-shadow: inset 0 0 10px rgba(0,0,0,0.2);
-        }
+        .selected { background-color: #2ecc71 !important; }
         .highlighted::before {
             content: '';
             width: 16px;
             height: 16px;
-            background-color: rgba(46, 204, 113, 0.7);
+            background-color: rgba(46, 204, 113, 0.6);
             border-radius: 50%;
             position: absolute;
             z-index: 2;
             pointer-events: none;
         }
 
-        /* Replay Engine UI Controls */
         #replay-panel {
-            display: none; /* Injected dynamically */
+            display: none;
             flex-direction: column;
             align-items: center;
-            background-color: #2c3e50;
+            background-color: #34495e;
             border: 2px dashed #f1c40f;
             border-radius: 8px;
             padding: 15px;
             margin-top: 20px;
-            width: 480px;
+            width: 520px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-            animation: slideIn 0.3s ease-out;
+            box-sizing: border-box;
         }
         .replay-buttons {
             display: flex;
@@ -171,14 +171,13 @@
             margin-top: 10px;
         }
         .replay-btn {
-            background-color: #34495e;
-            color: #f1c40f;
-            border: 1px solid #f1c40f;
             padding: 8px 16px;
             border-radius: 4px;
             cursor: pointer;
             font-weight: bold;
-            transition: all 0.2s ease;
+            background-color: #2c3e50;
+            color: #f1c40f;
+            border: 1px solid #f1c40f;
         }
         .replay-btn:hover:not(:disabled) {
             background-color: #f1c40f;
@@ -195,38 +194,51 @@
             font-weight: bold;
             color: #ecf0f1;
         }
-
-        @keyframes slideIn {
-            0% { transform: translateY(12px); opacity: 0; }
-            100% { transform: translateY(0); opacity: 1; }
-        }
     </style>
 </head>
-<body>
+<body oncontextmenu="return false;">
 
-    <h1>Take King Chess</h1>
-    <p>Capture the enemy King to win. Toggle between playing against a friend or testing your skills against the Grandmaster AI Engine!</p>
+    <h1>Take King Chess (Offline Sandbox)</h1>
+    <p>Play locally with a friend on the same computer, or challenge the Grandmaster Tactical AI! Right-click and drag to create strategic planning arrows.</p>
     
-    <div id="control-panel">
-        <button id="mode-toggle">Game Mode: Vs Friend (Local)</button>
-        <hr style="width:100%; border:0; border-top:1px solid #5d6d7e; margin:5px 0;">
+    <div id="config-panel">
+        <div class="config-row">
+            <label for="mode-select" style="font-weight: bold;">Opponent Mode: </label>
+            <select id="mode-select">
+                <option value="ai">Vs. Grandmaster AI (You are White)</option>
+                <option value="local">Local Pass & Play (Two Players)</option>
+            </select>
+            <button id="reset-btn" style="padding: 8px 15px; border-radius:4px; border:none; background:#e67e22; color:white; font-weight:bold; cursor:pointer;">Restart Game</button>
+        </div>
+    </div>
+
+    <div id="level-container">
         <label for="level-slider" style="font-weight: bold; font-size: 1.1rem;">Game Rule Level: <span id="level-val">1</span></label>
-        <input type="range" id="level-slider" min="1" max="8" value="1">
+        <input type="range" id="level-slider" min="1" max="10" value="1">
         <div id="level-desc">Level 1: Normal Chess. Standard movement rules apply.</div>
     </div>
 
-    <div id="status" class="white-turn">White's Turn</div>
-    <div id="chessboard"></div>
+    <div id="status">White's Turn</div>
+    
+    <div id="board-wrapper">
+        <div id="chessboard"></div>
+        <svg id="arrow-svg">
+            <defs>
+                <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="6" refY="3.5" orient="auto">
+                    <polygon points="0 0, 10 3.5, 0 7" fill="rgba(230, 126, 34, 0.85)" />
+                </marker>
+            </defs>
+        </svg>
+    </div>
 
     <div id="replay-panel">
         <div id="replay-counter">Reviewing Move: 0 / 0</div>
         <div class="replay-buttons">
-            <button class="replay-btn" id="btn-first">⏮ First</button>
+            <button class="replay-btn" id="btn-first">First Move</button>
             <button class="replay-btn" id="btn-prev">◀ Back</button>
             <button class="replay-btn" id="btn-next">Next ▶</button>
             <button class="replay-btn" id="btn-last">Last ⏭</button>
         </div>
-        <button class="replay-btn" id="btn-restart" style="margin-top:12px; border-color:#2ecc71; color:#2ecc71;">🔄 Reset & Play Again</button>
     </div>
 
     <script>
@@ -235,108 +247,54 @@
         const levelSlider = document.getElementById('level-slider');
         const levelValDisplay = document.getElementById('level-val');
         const levelDescDisplay = document.getElementById('level-desc');
-        const modeToggleBtn = document.getElementById('mode-toggle');
-        
-        // Replay Dom References
+        const modeSelect = document.getElementById('mode-select');
+        const resetBtn = document.getElementById('reset-btn');
+        const arrowSvg = document.getElementById('arrow-svg');
+
         const replayPanel = document.getElementById('replay-panel');
         const replayCounter = document.getElementById('replay-counter');
         const btnFirst = document.getElementById('btn-first');
         const btnPrev = document.getElementById('btn-prev');
         const btnNext = document.getElementById('btn-next');
         const btnLast = document.getElementById('btn-last');
-        const btnRestart = document.getElementById('btn-restart');
 
         const symbols = {
-            'P': '♙', 'R': '♖', 'N': '♘', 'B': '♗', 'Q': '♕', 'K': '♔',
-            'p': '♟', 'r': '♜', 'n': '♞', 'b': '♝', 'q': '♛', 'k': '♚'
+            'P': '♙', 'R': '♖', 'N': '♘', 'B': '♗', 'Q': '♕', 'K': '♔', 'G': '🛡️',
+            'p': '♟', 'r': '♜', 'n': '♞', 'b': '♝', 'q': '♛', 'k': '♚', 'g': '🛡️'
         };
 
         let currentLevel = 1;
-        let isAIMode = false; 
+        let isAiMode = true; 
 
         const levelDescriptions = {
             1: "Level 1: Normal Chess. Standard movement rules apply.",
-            2: "Level 2: Goblin Pawns! Pawns can move 1 or 2 squares forward or diagonally, jumping over blocking pieces.",
-            3: "Level 3: Horse Queens. The traditional Queen gains full Knight movement attributes.",
-            4: "Level 4: Phantom Rooks. Castles can leap over obstacles natively like Knights.",
-            5: "Level 5: Kinetic Bishops. Clergy rebound and bank off the boundaries of the board matrix.",
-            6: "Level 6: Perilous Ice. Stepping on frozen hazards traps pieces in place for 1 full turn.",
-            7: "Level 7: Sovereign Swap. The Monarch can freely switch physical spaces with any active ally.",
-            8: "Level 8: Total Chaos Rule! Every single variant capability across all levels unlocks concurrently."
+            2: "Level 2: Goblin Pawns! Pawns move 1 or 2 squares forward or diagonally, jumping completely over obstacles.",
+            3: "Level 3: Horse Queens. The traditional Queen transforms completely into an agile Knight-Queen compound construct.",
+            4: "Level 4: Phantom Rooks. Heavy Siege Castles gain the dimensional ability to jump obstacles natively like Knights.",
+            5: "Level 5: Kinetic Bishops. Clergy track vectors that rebound off the boundaries of the board matrix to bank paths.",
+            6: "Level 6: Perilous Ice. Random tiles look slippery. Landing freezes pieces: they cannot capture and require 1 turn to stabilize.",
+            7: "Level 7: Sovereign Swap. The Monarch rules space, enjoying capability to swap coordinate matrices safely with any ally.",
+            8: "Level 8: Blitz Chargers. Horses harness double energy output, allowing them to jump twice as far as traditional Knights.",
+            9: "Level 9: The Grand Arena. Grid size safely expands to 10x10. Introduces the Guardian (G), who drops out of nowhere directly in front of your own pieces.",
+            10: "Level 10: Absolute Armageddon! All structural rules, variant configurations, and size scales mesh into one singular sandbox."
         };
 
         let board = [];
-        let itemSlippedState = Array(8).fill(null).map(() => Array(8).fill(null));
-        let iceLayout = Array(8).fill(null).map(() => Array(8).fill(false));
+        let boardSize = 8;
+        let itemSlippedState = [];
+        let iceLayout = [];
 
         let turn = 'w'; 
         let selected = null; 
         let gameOver = false;
+        let isAnimating = false; 
 
-        // --- REPLAY STATE HISTORY DATABASE ---
+        let activeArrows = [];
+        let drawingStartCell = null;
+
         let gameHistory = [];
         let replayIndex = 0;
         let isReplaying = false;
-
-        // --- PST ENGINE ARRAYS ---
-        const pawnPST = [[0,0,0,0,0,0,0,0],[50,50,50,50,50,50,50,50],[10,10,20,30,30,20,10,10],[5,5,10,25,25,10,5,5],[0,0,0,20,20,0,0,0],[5,-5,-10,0,0,-10,-5,5],[5,10,10,-20,-20,10,10,5],[0,0,0,0,0,0,0,0]];
-        const knightPST = [[-50,-40,-30,-30,-30,-30,-40,-50],[-40,-20,0,0,0,0,-20,-40],[-30,0,10,15,15,10,0,-30],[-30,5,15,20,20,15,5,-30],[-30,0,15,20,20,15,0,-30],[-30,5,10,15,15,10,5,-30],[-40,-20,0,5,5,0,-20,-40],[-50,-40,-30,-30,-30,-30,-40,-50]];
-        const bishopPST = [[-20,-10,-10,-10,-10,-10,-10,-20],[-10,0,0,0,0,0,0,-10],[-10,0,5,10,10,5,0,-10],[-10,5,5,10,10,5,5,-10],[-10,0,10,10,10,10,0,-10],[-10,10,10,10,10,10,10,-10],[-10,5,0,0,0,0,5,-10],[-20,-10,-10,-10,-10,-10,-10,-20]];
-        const rookPST = [[0,0,0,0,0,0,0,0],[5,10,10,10,10,10,10,5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[0,0,0,5,5,0,0,0]];
-        const queenPST = [[-20,-10,-10,-5,-5,-10,-10,-20],[-10,0,0,0,0,0,0,-10],[-10,0,5,5,5,5,0,-10],[-5,0,5,5,5,5,0,-5],[0,0,5,5,5,5,0,-5],[-10,5,5,5,5,5,0,-10],[-10,0,5,0,0,0,0,-10],[-20,-10,-10,-5,-5,-10,-10,-20]];
-        const kingPST = [[-30,-40,-40,-50,-50,-40,-40,-30],[-30,-40,-40,-50,-50,-40,-40,-30],[-30,-40,-40,-50,-50,-40,-40,-30],[-30,-40,-40,-50,-50,-40,-40,-30],[-20,-30,-30,-40,-40,-30,-30,-20],[-10,-20,-20,-20,-20,-20,-20,-10],[20,20,0,0,0,0,20,20],[20,30,10,0,0,10,30,20]];
-
-        function setupBoardDom() {
-            boardElem.innerHTML = '';
-            for (let r = 0; r < 8; r++) {
-                for (let c = 0; c < 8; c++) {
-                    const cell = document.createElement('div');
-                    cell.classList.add('cell', (r + c) % 2 === 0 ? 'light' : 'dark');
-                    cell.dataset.row = r;
-                    cell.dataset.col = c;
-                    cell.addEventListener('dragover', onDragOver);
-                    cell.addEventListener('drop', onDrop);
-                    cell.addEventListener('click', onSquareClick);
-                    boardElem.appendChild(cell);
-                }
-            }
-        }
-
-        function initializeGame() {
-            board = [
-                ['r','n','b','q','k','b','n','r'],
-                ['p','p','p','p','p','p','p','p'],
-                ['','','','','','','',''],
-                ['','','','','','','',''],
-                ['','','','','','','',''],
-                ['','','','','','','',''],
-                ['P','P','P','P','P','P','P','P'],
-                ['R','N','B','Q','K','B','N','R']
-            ];
-            turn = 'w';
-            selected = null;
-            gameOver = false;
-            isReplaying = false;
-            gameHistory = [];
-            itemSlippedState = Array(8).fill(null).map(() => Array(8).fill(null));
-            
-            iceLayout = Array(8).fill(null).map(() => Array(8).fill(false));
-            if (currentLevel === 6 || currentLevel === 8) {
-                let spaces = [[2,2], [2,5], [3,3], [3,4], [4,3], [4,4], [5,2], [5,5]];
-                spaces.forEach(([r,c]) => { iceLayout[r][c] = true; });
-            }
-            
-            replayPanel.style.display = 'none';
-            levelSlider.disabled = false;
-            modeToggleBtn.disabled = false;
-
-            // Save Snapshot of Starting Position
-            saveHistoryState();
-
-            updateStatusDisplay();
-            setupBoardDom();
-            drawBoard();
-        }
 
         function saveHistoryState() {
             gameHistory.push({
@@ -346,86 +304,126 @@
             });
         }
 
-        function updateStatusDisplay() {
-            if (gameOver && !isReplaying) return;
+        function initializeGame() {
+            boardSize = (currentLevel === 9 || currentLevel === 10) ? 10 : 8;
+            isAiMode = (modeSelect.value === 'ai');
+
+            boardElem.style.gridTemplateColumns = `repeat(${boardSize}, 60px)`;
+            boardElem.style.gridTemplateRows = `repeat(${boardSize}, 60px)`;
+            const pixels = boardSize * 60;
+            arrowSvg.setAttribute('width', pixels + 10);
+            arrowSvg.setAttribute('height', pixels + 10);
+            arrowSvg.style.width = (pixels + 10) + 'px';
+            arrowSvg.style.height = (pixels + 10) + 'px';
+
+            if (boardSize === 10) {
+                board = [
+                    ['r','n','b','q','k','g','g','b','n','r'],
+                    ['p','p','p','p','p','p','p','p','p','p'],
+                    ['','','','','','','','','',''],
+                    ['','','','','','','','','',''],
+                    ['','','','','','','','','',''],
+                    ['','','','','','','','','',''],
+                    ['','','','','','','','','',''],
+                    ['','','','','','','','','',''],
+                    ['P','P','P','P','P','P','P','P','P','P'],
+                    ['R','N','B','Q','K','G','G','B','N','R']
+                ];
+            } else {
+                board = [
+                    ['r','n','b','q','k','b','n','r'],
+                    ['p','p','p','p','p','p','p','p'],
+                    ['','','','','','','',''],
+                    ['','','','','','','',''],
+                    ['','','','','','','',''],
+                    ['','','','','','','',''],
+                    ['P','P','P','P','P','P','P','P'],
+                    ['R','N','B','Q','K','B','N','R']
+                ];
+            }
+
+            turn = 'w';
+            selected = null;
+            gameOver = false;
+            isReplaying = false;
+            isAnimating = false;
+            activeArrows = [];
+            redrawArrows();
+            gameHistory = [];
+            replayPanel.style.display = 'none';
+            
+            itemSlippedState = Array(boardSize).fill(null).map(() => Array(boardSize).fill(null));
+            iceLayout = Array(boardSize).fill(null).map(() => Array(boardSize).fill(false));
+            
+            if (currentLevel === 6 || currentLevel === 10) {
+                let spaces = boardSize === 10 ? [[3,3], [3,6], [4,4], [4,5], [5,4], [5,5], [6,3], [6,6]] : [[2,2], [2,5], [3,3], [3,4], [4,3], [4,4], [5,2], [5,5]];
+                spaces.forEach(([r,c]) => { iceLayout[r][c] = true; });
+            }
+            
+            saveHistoryState();
+            updateStatusMessage();
+            drawBoard();
+        }
+
+        function updateStatusMessage() {
             if (isReplaying) {
-                statusElem.textContent = "Viewing Historic Replay Match Elements";
+                statusElem.textContent = "Reviewing Sandbox Match Replay";
                 statusElem.style.color = "#f1c40f";
                 return;
             }
-            if (turn === 'w') {
-                statusElem.textContent = "White's Turn";
-                statusElem.className = "white-turn";
+            if (gameOver) return;
+            
+            let turnTxt = (turn === 'w') ? "White's Turn" : "Black's Turn";
+            if (isAiMode && turn === 'b') {
+                statusElem.textContent = "Grandmaster AI is thinking...";
+                statusElem.style.color = "#e74c3c";
             } else {
-                statusElem.textContent = isAIMode ? "AI is looking deep..." : "Black's Turn";
-                statusElem.className = "black-turn";
+                statusElem.textContent = turnTxt;
+                statusElem.style.color = "#2ecc71";
             }
         }
 
         function drawBoard() {
-            for (let r = 0; r < 8; r++) {
-                for (let c = 0; c < 8; c++) {
-                    const cell = boardElem.querySelector(`[data-row="${r}"][data-col="${c}"]`);
-                    
-                    if (iceLayout[r][c]) {
-                        cell.classList.add('slippery');
-                    } else {
-                        cell.classList.remove('slippery');
-                    }
+            boardElem.innerHTML = '';
+            for (let r = 0; r < boardSize; r++) {
+                for (let c = 0; c < boardSize; c++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('cell', (r + c) % 2 === 0 ? 'light' : 'dark');
+                    cell.dataset.row = r;
+                    cell.dataset.col = c;
+
+                    if (iceLayout[r][c]) cell.classList.add('slippery');
+
+                    cell.addEventListener('dragover', onDragOver);
+                    cell.addEventListener('drop', onDrop);
+                    cell.addEventListener('mousedown', onSquareMouseDown);
+                    cell.addEventListener('mouseup', onSquareMouseUp);
 
                     const pieceType = board[r][c];
-                    const existingPieceDiv = cell.querySelector('.piece');
-
                     if (pieceType) {
+                        const pieceDiv = document.createElement('div');
+                        pieceDiv.classList.add('piece');
+                        pieceDiv.textContent = symbols[pieceType];
+                        
                         const isWhite = pieceType === pieceType.toUpperCase();
-                        const visualSymbol = symbols[pieceType];
+                        pieceDiv.classList.add(isWhite ? 'piece-w' : 'piece-b');
+                        
+                        if (itemSlippedState[r][c] !== null) pieceDiv.classList.add('slipped-piece');
+                        
+                        const allowableTurn = (turn === 'w' && isWhite) || (turn === 'b' && !isWhite);
+                        const blockAiDrag = isAiMode ? (turn === 'w') : true;
 
-                        if (existingPieceDiv) {
-                            if (existingPieceDiv.textContent !== visualSymbol) {
-                                existingPieceDiv.textContent = visualSymbol;
-                                existingPieceDiv.className = 'piece ' + (isWhite ? 'piece-w' : 'piece-b');
-                            }
-                            
-                            if (itemSlippedState[r][c]) {
-                                existingPieceDiv.classList.add('slipped-piece');
-                            } else {
-                                existingPieceDiv.classList.remove('slipped-piece');
-                            }
-
-                            if (!gameOver && !isReplaying && ((turn === 'w' && isWhite) || (turn === 'b' && !isWhite && !isAIMode))) {
-                                existingPieceDiv.setAttribute('draggable', 'true');
-                                existingPieceDiv.ondragstart = (e) => onDragStart(e, r, c);
-                            } else {
-                                existingPieceDiv.removeAttribute('draggable');
-                            }
-                        } else {
-                            const pieceDiv = document.createElement('div');
-                            pieceDiv.classList.add('piece', isWhite ? 'piece-w' : 'piece-b');
-                            pieceDiv.textContent = visualSymbol;
-                            
-                            if (itemSlippedState[r][c]) pieceDiv.classList.add('slipped-piece');
-                            
-                            if (!gameOver && !isReplaying && ((turn === 'w' && isWhite) || (turn === 'b' && !isWhite && !isAIMode))) {
-                                pieceDiv.setAttribute('draggable', 'true');
-                                pieceDiv.addEventListener('dragstart', (e) => onDragStart(e, r, c));
-                            }
-                            
-                            cell.appendChild(pieceDiv);
+                        if (!gameOver && !isReplaying && !isAnimating && allowableTurn && blockAiDrag && itemSlippedState[r][c] === null) {
+                            pieceDiv.setAttribute('draggable', 'true');
+                            pieceDiv.addEventListener('dragstart', (e) => onDragStart(e, r, c));
                         }
-                    } else {
-                        if (existingPieceDiv) existingPieceDiv.remove();
+                        
+                        cell.appendChild(pieceDiv);
                     }
+                    boardElem.appendChild(cell);
                 }
             }
         }
-
-        modeToggleBtn.addEventListener('click', () => {
-            isAIMode = !isAIMode;
-            modeToggleBtn.textContent = isAIMode ? "Game Mode: Vs Grandmaster AI" : "Game Mode: Vs Friend (Local)";
-            modeToggleBtn.style.backgroundColor = isAIMode ? "#9b59b6" : "#e67e22";
-            modeToggleBtn.style.boxShadow = isAIMode ? "0 3px 0 #8e44ad" : "0 3px 0 #d35400";
-            initializeGame();
-        });
 
         levelSlider.addEventListener('input', (e) => {
             currentLevel = parseInt(e.target.value);
@@ -434,8 +432,12 @@
             initializeGame();
         });
 
+        modeSelect.addEventListener('change', () => { initializeGame(); });
+        resetBtn.addEventListener('click', () => { initializeGame(); });
+
         function onDragStart(e, r, c) {
-            if (gameOver || isReplaying || (turn === 'b' && isAIMode)) { e.preventDefault(); return; }
+            if (gameOver || isReplaying || isAnimating) { e.preventDefault(); return; }
+            if (isAiMode && turn === 'b') { e.preventDefault(); return; }
             selectPiece(r, c);
         }
 
@@ -443,39 +445,91 @@
 
         function onDrop(e) {
             e.preventDefault();
-            if (isReplaying) return;
+            if (isReplaying || isAnimating) return;
             const cell = e.currentTarget;
             attemptMove(parseInt(cell.dataset.row), parseInt(cell.dataset.col));
         }
 
-        function onSquareClick(e) {
-            if (gameOver || isReplaying || (turn === 'b' && isAIMode)) return;
+        function onSquareMouseDown(e) {
             const cell = e.currentTarget;
             const r = parseInt(cell.dataset.row);
             const c = parseInt(cell.dataset.col);
 
-            if (selected) {
-                if (attemptMove(r, c)) return;
+            if (e.button === 2) { 
+                drawingStartCell = { r, c };
+            } else if (e.button === 0) { 
+                if (activeArrows.length > 0) {
+                    activeArrows = [];
+                    redrawArrows();
+                }
+
+                if (gameOver || isReplaying || isAnimating) return;
+                if (isAiMode && turn === 'b') return;
+
+                if (selected) {
+                    if (attemptMove(r, c)) return;
+                }
+                
+                const piece = board[r][c];
+                if (!piece) { selected = null; clearHighlights(); return; }
+                
+                const isWhitePiece = piece === piece.toUpperCase();
+                if (((turn === 'w' && isWhitePiece) || (turn === 'b' && !isWhitePiece)) && itemSlippedState[r][c] === null) {
+                    selectPiece(r, c);
+                } else {
+                    selected = null;
+                    clearHighlights();
+                }
             }
-            
-            const piece = board[r][c];
-            const isWhitePiece = piece && piece === piece.toUpperCase();
-            
-            if (piece && ((turn === 'w' && isWhitePiece) || (turn === 'b' && !isWhitePiece))) {
-                selectPiece(r, c);
-            } else {
-                selected = null;
-                clearHighlights();
+        }
+
+        function onSquareMouseUp(e) {
+            if (e.button === 2 && drawingStartCell) { 
+                const cell = e.currentTarget;
+                const r = parseInt(cell.dataset.row);
+                const c = parseInt(cell.dataset.col);
+
+                if (drawingStartCell.r !== r || drawingStartCell.c !== c) {
+                    const arrowEntry = { fromR: drawingStartCell.r, fromC: drawingStartCell.c, toR: r, toC: c };
+                    const duplicateIndex = activeArrows.findIndex(a => a.fromR === arrowEntry.fromR && a.fromC === arrowEntry.fromC && a.toR === arrowEntry.toR && a.toC === arrowEntry.toC);
+                    if (duplicateIndex !== -1) {
+                        activeArrows.splice(duplicateIndex, 1);
+                    } else {
+                        activeArrows.push(arrowEntry);
+                    }
+                    redrawArrows();
+                }
+                drawingStartCell = null;
             }
+        }
+
+        function redrawArrows() {
+            const elements = arrowSvg.querySelectorAll('line');
+            elements.forEach(el => el.remove());
+
+            activeArrows.forEach(arrow => {
+                let x1 = arrow.fromC * 60 + 30;
+                let y1 = arrow.fromR * 60 + 30;
+                let x2 = arrow.toC * 60 + 30;
+                let y2 = arrow.toR * 60 + 30;
+
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+                line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+                line.setAttribute('stroke', 'rgba(230, 126, 34, 0.85)');
+                line.setAttribute('stroke-width', '5');
+                line.setAttribute('marker-end', 'url(#arrowhead)');
+                arrowSvg.appendChild(line);
+            });
         }
 
         function selectPiece(r, c) {
             clearHighlights();
             selected = { r, c };
-            boardElem.querySelector(`[data-row="${r}"][data-col="${c}"]`)?.classList.add('selected');
+            document.querySelector(`[data-row="${r}"][data-col="${c}"]`)?.classList.add('selected');
 
             getLegalMoves(r, c, board).forEach(m => {
-                boardElem.querySelector(`[data-row="${m.toR}"][data-col="${m.toC}"]`)?.classList.add('highlighted');
+                document.querySelector(`[data-row="${m.toR}"][data-col="${m.toC}"]`)?.classList.add('highlighted');
             });
         }
 
@@ -486,35 +540,83 @@
 
             if (validMove) {
                 processSlipTurnRecovery(turn);
-                executeMove(board, validMove);
-                selected = null;
-                clearHighlights();
-                
-                // Track state post mutation
-                saveHistoryState();
-
-                if (!checkGameEnd()) {
-                    turn = (turn === 'w') ? 'b' : 'w';
-                    updateStatusDisplay();
-                    drawBoard();
-                    
-                    if (isAIMode && turn === 'b') {
-                        setTimeout(makeAIMove, 150);
-                    }
-                } else {
-                    drawBoard();
-                    activateReplayEngine();
-                }
+                animateAndExecuteMove(validMove);
                 return true;
             }
             return false;
         }
 
-        function clearHighlights() {
-            boardElem.querySelectorAll('.cell').forEach(c => c.classList.remove('selected', 'highlighted'));
+        function animateAndExecuteMove(move) {
+            isAnimating = true;
+            selected = null;
+            clearHighlights();
+            activeArrows = [];
+            redrawArrows();
+
+            const fromCell = document.querySelector(`[data-row="${move.fromR}"][data-col="${move.fromC}"]`);
+            const toCell = document.querySelector(`[data-row="${move.toR}"][data-col="${move.toC}"]`);
+            const movingPieceElem = fromCell ? fromCell.querySelector('.piece') : null;
+
+            if (movingPieceElem && fromCell && toCell) {
+                const fromRect = fromCell.getBoundingClientRect();
+                const toRect = toCell.getBoundingClientRect();
+                
+                let deltaX = toRect.left - fromRect.left;
+                let deltaY = toRect.top - fromRect.top;
+
+                movingPieceElem.style.transition = "transform 0.25s ease-out";
+                
+                let targetPieceElem = toCell.querySelector('.piece');
+                if (move.type === 'swap' && targetPieceElem) {
+                    targetPieceElem.style.transition = "transform 0.25s ease-out";
+                    targetPieceElem.style.transform = `translate(${-deltaX}px, ${-deltaY}px)`;
+                } else if (targetPieceElem) {
+                    targetPieceElem.style.transition = "opacity 0.15s ease";
+                    targetPieceElem.style.opacity = "0";
+                }
+
+                movingPieceElem.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+
+                movingPieceElem.addEventListener('transitionend', function handler() {
+                    movingPieceElem.removeEventListener('transitionend', handler);
+                    finalizeMoveState(move);
+                });
+            } else {
+                finalizeMoveState(move);
+            }
         }
 
-        // --- RULE VARIANT CALCULATOR ---
+        function finalizeMoveState(move) {
+            executeMove(board, move);
+            
+            const pieceAtDestination = board[move.toR][move.toC];
+            if (pieceAtDestination === 'P' && move.toR === 0) {
+                board[move.toR][move.toC] = 'Q';
+            } else if (pieceAtDestination === 'p' && move.toR === (boardSize - 1)) {
+                board[move.toR][move.toC] = 'q';
+            }
+
+            saveHistoryState();
+            isAnimating = false;
+
+            if (!checkGameEnd()) {
+                turn = (turn === 'w') ? 'b' : 'w';
+                updateStatusMessage();
+                drawBoard();
+
+                if (isAiMode && turn === 'b') {
+                    setTimeout(() => { triggerAiCalculation(); }, 400);
+                }
+            } else {
+                activateReplayEngine();
+                drawBoard();
+            }
+        }
+
+        function clearHighlights() {
+            document.querySelectorAll('.cell').forEach(c => c.classList.remove('selected', 'highlighted'));
+        }
+
         function getLegalMoves(r, c, currentBoard) {
             const piece = currentBoard[r][c];
             if (!piece) return [];
@@ -522,48 +624,51 @@
             const moves = [];
             const isWhite = piece === piece.toUpperCase();
             const type = piece.toLowerCase();
-            const isSlipped = itemSlippedState[r][c] !== null;
+            if (itemSlippedState[r][c] !== null) return []; 
 
             const rookDirs = [[1,0], [-1,0], [0,1], [0,-1]];
             const bishopDirs = [[1,1], [1,-1], [-1,1], [-1,-1]];
-            const knightMoves = [[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]];
+            
+            let knightOffsets = [[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]];
 
-            const lvl2 = (currentLevel === 2 || currentLevel === 8);
-            const lvl3 = (currentLevel === 3 || currentLevel === 8);
-            const lvl4 = (currentLevel === 4 || currentLevel === 8);
-            const lvl5 = (currentLevel === 5 || currentLevel === 8);
-            const lvl7 = (currentLevel === 7 || currentLevel === 8);
+            const lvl2 = (currentLevel === 2 || currentLevel === 10);
+            const lvl3 = (currentLevel === 3 || currentLevel === 10);
+            const lvl4 = (currentLevel === 4 || currentLevel === 10);
+            const lvl5 = (currentLevel === 5 || currentLevel === 10);
+            const lvl7 = (currentLevel === 7 || currentLevel === 10);
+            const lvl8 = (currentLevel === 8 || currentLevel === 10);
+
+            if (lvl8) {
+                knightOffsets = knightOffsets.concat([[4,2],[4,-2],[-4,2],[-4,-2],[2,4],[2,-4],[-2,4],[-2,-4]]);
+            }
 
             switch (type) {
                 case 'p':
-                    const forward = isWhite ? -1 : 1;
                     if (lvl2) {
-                        const goblinOffsets = [
-                            [forward, 0], [forward * 2, 0],     
-                            [forward, -1], [forward, 1],       
-                            [forward * 2, -2], [forward * 2, 2] 
-                        ];
+                        const forward = isWhite ? -1 : 1;
+                        const goblinOffsets = [[forward * 1, 0], [forward * 2, 0], [forward * 1, 1], [forward * 1, -1], [forward * 2, 2], [forward * 2, -2]];
                         goblinOffsets.forEach(([dr, dc]) => {
                             const targetR = r + dr, targetC = c + dc;
                             if (isOnBoard(targetR, targetC)) {
                                 const target = currentBoard[targetR][targetC];
-                                if (!target || (isEnemy(piece, target) && !isSlipped)) {
+                                if (!target || isEnemy(piece, target)) {
                                     moves.push({ fromR: r, fromC: c, toR: targetR, toC: targetC, type: 'normal' });
                                 }
                             }
                         });
                     } else {
-                        if (isOnBoard(r + forward, c) && !currentBoard[r + forward][c]) {
-                            moves.push({ fromR: r, fromC: c, toR: r + forward, toC: c, type: 'normal' });
-                            if (r === (isWhite ? 6 : 1) && !currentBoard[r + forward * 2][c]) {
-                                moves.push({ fromR: r, fromC: c, toR: r + forward * 2, toC: c, type: 'normal' });
+                        const dir = isWhite ? -1 : 1;
+                        if (isOnBoard(r + dir, c) && !currentBoard[r + dir][c]) {
+                            moves.push({ fromR: r, fromC: c, toR: r + dir, toC: c, type: 'normal' });
+                            if (r === (isWhite ? (boardSize - 2) : 1) && !currentBoard[r + dir * 2][c] && !currentBoard[r + dir][c]) {
+                                moves.push({ fromR: r, fromC: c, toR: r + dir * 2, toC: c, type: 'normal' });
                             }
                         }
                         [-1, 1].forEach(dc => {
-                            if (isOnBoard(r + forward, c + dc)) {
-                                const target = currentBoard[r + forward][c + dc];
-                                if (target && isEnemy(piece, target) && !isSlipped) {
-                                    moves.push({ fromR: r, fromC: c, toR: r + forward, toC: c + dc, type: 'normal' });
+                            if (isOnBoard(r + dir, c + dc)) {
+                                const target = currentBoard[r + dir][c + dc];
+                                if (target && isEnemy(piece, target)) {
+                                    moves.push({ fromR: r, fromC: c, toR: r + dir, toC: c + dc, type: 'normal' });
                                 }
                             }
                         });
@@ -571,12 +676,12 @@
                     break;
 
                 case 'r':
-                    processSlidingMoves(r, c, rookDirs, piece, currentBoard, moves, isSlipped);
+                    processSlidingMoves(r, c, rookDirs, piece, currentBoard, moves);
                     if (lvl4) {
-                        knightMoves.forEach(([dr, dc]) => {
+                        knightOffsets.forEach(([dr, dc]) => {
                             if (isOnBoard(r + dr, c + dc)) {
                                 const target = currentBoard[r + dr][c + dc];
-                                if (!target || (isEnemy(piece, target) && !isSlipped)) {
+                                if (!target || isEnemy(piece, target)) {
                                     moves.push({ fromR: r, fromC: c, toR: r + dr, toC: c + dc, type: 'normal' });
                                 }
                             }
@@ -585,17 +690,17 @@
                     break;
 
                 case 'b':
-                    if (lvl5) processBouncingBishops(r, c, bishopDirs, piece, currentBoard, moves, isSlipped);
-                    else processSlidingMoves(r, c, bishopDirs, piece, currentBoard, moves, isSlipped);
+                    if (lvl5) processBouncingBishops(r, c, bishopDirs, piece, currentBoard, moves);
+                    else processSlidingMoves(r, c, bishopDirs, piece, currentBoard, moves);
                     break;
 
                 case 'q':
-                    processSlidingMoves(r, c, [...rookDirs, ...bishopDirs], piece, currentBoard, moves, isSlipped);
+                    processSlidingMoves(r, c, [...rookDirs, ...bishopDirs], piece, currentBoard, moves);
                     if (lvl3) {
-                        knightMoves.forEach(([dr, dc]) => {
+                        knightOffsets.forEach(([dr, dc]) => {
                             if (isOnBoard(r + dr, c + dc)) {
                                 const target = currentBoard[r + dr][c + dc];
-                                if (!target || (isEnemy(piece, target) && !isSlipped)) {
+                                if (!target || isEnemy(piece, target)) {
                                     moves.push({ fromR: r, fromC: c, toR: r + dr, toC: c + dc, type: 'normal' });
                                 }
                             }
@@ -604,11 +709,11 @@
                     break;
 
                 case 'n':
-                    knightMoves.forEach(([dr, dc]) => {
+                    knightOffsets.forEach(([dr, dc]) => {
                         if (isOnBoard(r + dr, c + dc)) {
                             const target = currentBoard[r + dr][c + dc];
-                            if (!target || (isEnemy(piece, target) && !isSlipped)) {
-                                    moves.push({ fromR: r, fromC: c, toR: r + dr, toC: c + dc, type: 'normal' });
+                            if (!target || isEnemy(piece, target)) {
+                                moves.push({ fromR: r, fromC: c, toR: r + dr, toC: c + dc, type: 'normal' });
                             }
                         }
                     });
@@ -618,17 +723,36 @@
                     [...rookDirs, ...bishopDirs].forEach(([dr, dc]) => {
                         if (isOnBoard(r + dr, c + dc)) {
                             const target = currentBoard[r + dr][c + dc];
-                            if (!target || (isEnemy(piece, target) && !isSlipped)) {
+                            if (!target || isEnemy(piece, target)) {
                                 moves.push({ fromR: r, fromC: c, toR: r + dr, toC: c + dc, type: 'normal' });
                             }
                         }
                     });
                     if (lvl7) {
-                        for (let tr = 0; tr < 8; tr++) {
-                            for (let tc = 0; tc < 8; tc++) {
+                        for (let tr = 0; tr < boardSize; tr++) {
+                            for (let tc = 0; tc < boardSize; tc++) {
                                 const targetPiece = currentBoard[tr][tc];
                                 if (targetPiece && !isEnemy(piece, targetPiece) && targetPiece.toLowerCase() !== 'k') {
                                     moves.push({ fromR: r, fromC: c, toR: tr, toC: tc, type: 'swap' });
+                                }
+                            }
+                        }
+                    }
+                    break;
+
+                case 'g':
+                    for (let tr = 0; tr < boardSize; tr++) {
+                        for (let tc = 0; tc < boardSize; tc++) {
+                            const targetPiece = currentBoard[tr][tc];
+                            if (targetPiece && !isEnemy(piece, targetPiece) && (tr !== r || tc !== c)) {
+                                const targetIsWhite = targetPiece === targetPiece.toUpperCase();
+                                const frontOffset = targetIsWhite ? -1 : 1; 
+                                const frontR = tr + frontOffset;
+                                
+                                if (isOnBoard(frontR, tc) && !currentBoard[frontR][tc]) {
+                                    if (!moves.some(m => m.toR === frontR && m.toC === tc)) {
+                                        moves.push({ fromR: r, fromC: c, toR: frontR, toC: tc, type: 'normal' });
+                                    }
                                 }
                             }
                         }
@@ -638,7 +762,7 @@
             return moves;
         }
 
-        function processSlidingMoves(r, c, directions, piece, currentBoard, moveList, isSlipped) {
+        function processSlidingMoves(r, c, directions, piece, currentBoard, moveList) {
             directions.forEach(([dr, dc]) => {
                 let currR = r + dr, currC = c + dc;
                 while (isOnBoard(currR, currC)) {
@@ -646,7 +770,7 @@
                     if (!target) {
                         moveList.push({ fromR: r, fromC: c, toR: currR, toC: currC, type: 'normal' });
                     } else {
-                        if (isEnemy(piece, target) && !isSlipped) {
+                        if (isEnemy(piece, target)) {
                             moveList.push({ fromR: r, fromC: c, toR: currR, toC: currC, type: 'normal' });
                         }
                         break;
@@ -656,20 +780,30 @@
             });
         }
 
-        function processBouncingBishops(r, c, directions, piece, currentBoard, moveList, isSlipped) {
+        function processBouncingBishops(r, c, directions, piece, currentBoard, moveList) {
             directions.forEach(([dr, dc]) => {
                 let currR = r + dr, currC = c + dc, currentDr = dr, currentDc = dc, bounceCount = 0;
-                while (bounceCount <= 2) {
+                let stepsGuard = 0; 
+                while (bounceCount <= 2 && stepsGuard < 64) {
+                    stepsGuard++;
                     let hitWall = false;
-                    if (currR < 0 || currR >= 8) { currentDr = -currentDr; currR += currentDr * 2; hitWall = true; }
-                    if (currC < 0 || currC >= 8) { currentDc = -currentDc; currC += currentDc * 2; hitWall = true; }
-                    if (hitWall) { bounceCount++; if (!isOnBoard(currR, currC)) break; }
+                    
+                    if (currR < 0) { currentDr = 1; currR = 1; hitWall = true; }
+                    else if (currR >= boardSize) { currentDr = -1; currR = boardSize - 2; hitWall = true; }
+                    
+                    if (currC < 0) { currentDc = 1; currC = 1; hitWall = true; }
+                    else if (currC >= boardSize) { currentDc = -1; currC = boardSize - 2; hitWall = true; }
+                    
+                    if (hitWall) { 
+                        bounceCount++; 
+                        if (!isOnBoard(currR, currC)) break; 
+                    }
 
                     const target = currentBoard[currR][currC];
                     if (!target) {
                         moveList.push({ fromR: r, fromC: c, toR: currR, toC: currC, type: 'normal' });
                     } else {
-                        if ((currR !== r || currC !== c) && isEnemy(piece, target) && !isSlipped) {
+                        if ((currR !== r || currC !== c) && isEnemy(piece, target)) {
                             moveList.push({ fromR: r, fromC: c, toR: currR, toC: currC, type: 'normal' });
                         }
                         break;
@@ -679,170 +813,156 @@
             });
         }
 
-        function isOnBoard(r, c) { return r >= 0 && r < 8 && c >= 0 && c < 8; }
+        function isOnBoard(r, c) { return r >= 0 && r < boardSize && c >= 0 && c < boardSize; }
         function isEnemy(p1, p2) { return (p1 === p1.toUpperCase()) !== (p2 === p2.toUpperCase()); }
 
         function executeMove(targetBoard, move) {
             const piece = targetBoard[move.fromR][move.fromC];
-            const activeFreeze = itemSlippedState[move.fromR][move.fromC];
-
+            const originalSlipped = itemSlippedState[move.fromR][move.fromC];
+            
             if (move.type === 'swap') {
-                const secondaryPiece = targetBoard[move.toR][move.toC];
-                const secondaryFreeze = itemSlippedState[move.toR][move.toC];
+                const targetPiece = targetBoard[move.toR][move.toC];
+                const targetSlipped = itemSlippedState[move.toR][move.toC];
+                
                 targetBoard[move.toR][move.toC] = piece;
-                targetBoard[move.fromR][move.fromC] = secondaryPiece;
-                itemSlippedState[move.toR][move.toC] = activeFreeze;
-                itemSlippedState[move.fromR][move.fromC] = secondaryFreeze;
+                targetBoard[move.fromR][move.fromC] = targetPiece;
+                
+                itemSlippedState[move.toR][move.toC] = originalSlipped;
+                itemSlippedState[move.fromR][move.fromC] = targetSlipped;
             } else {
                 targetBoard[move.toR][move.toC] = piece;
                 targetBoard[move.fromR][move.fromC] = '';
-                itemSlippedState[move.toR][move.toC] = activeFreeze;
+                
                 itemSlippedState[move.fromR][move.fromC] = null;
-
-                if (piece === 'P' && move.toR === 0) targetBoard[move.toR][move.toC] = 'Q';
-                if (piece === 'p' && move.toR === 7) targetBoard[move.toR][move.toC] = 'q';
-            }
-
-            if ((currentLevel === 6 || currentLevel === 8) && iceLayout[move.toR][move.toC]) {
-                itemSlippedState[move.toR][move.toC] = targetBoard[move.toR][move.toC] === targetBoard[move.toR][move.toC].toUpperCase() ? 'w' : 'b';
+                if (iceLayout[move.toR][move.toC]) {
+                    itemSlippedState[move.toR][move.toC] = turn; 
+                } else {
+                    itemSlippedState[move.toR][move.toC] = null;
+                }
             }
         }
 
-        function processSlipTurnRecovery(color) {
-            for (let r = 0; r < 8; r++) {
-                for (let c = 0; c < 8; c++) {
-                    if (itemSlippedState[r][c] === color) itemSlippedState[r][c] = null;
+        function processSlipTurnRecovery(currentTurn) {
+            for (let r = 0; r < boardSize; r++) {
+                for (let c = 0; c < boardSize; c++) {
+                    if (itemSlippedState[r][c] === currentTurn) {
+                        itemSlippedState[r][c] = null;
+                    }
                 }
             }
         }
 
         function checkGameEnd() {
-            let wK = false, bK = false;
-            for (let r = 0; r < 8; r++) {
-                for (let c = 0; c < 8; c++) {
-                    if (board[r][c] === 'K') wK = true;
-                    if (board[r][c] === 'k') bK = true;
+            let whiteKingFound = false;
+            let blackKingFound = false;
+            
+            for (let r = 0; r < boardSize; r++) {
+                for (let c = 0; c < boardSize; c++) {
+                    if (board[r][c] === 'K') whiteKingFound = true;
+                    if (board[r][c] === 'k') blackKingFound = true;
                 }
             }
-            if (!wK) { 
-                statusElem.textContent = isAIMode ? "DEFEAT — THE AI TOOK YOUR KING!" : "BLACK WINS! THE WHITE KING HAS BEEN CAPTURED!"; 
-                statusElem.style.color = "#e74c3c"; gameOver = true; return true; 
-            }
-            if (!bK) { 
-                statusElem.textContent = isAIMode ? "VICTORY — YOU CAPTURED THE AI MONARCH!" : "WHITE WINS! THE BLACK KING HAS BEEN CAPTURED!"; 
-                statusElem.style.color = "#f1c40f"; gameOver = true; return true; 
+            
+            if (!whiteKingFound || !blackKingFound) {
+                gameOver = true;
+                if (!whiteKingFound) {
+                    statusElem.textContent = "Black Wins by Regicide!";
+                    statusElem.style.color = "#e74c3c";
+                } else {
+                    statusElem.textContent = "White Wins by Regicide!";
+                    statusElem.style.color = "#2ecc71";
+                }
+                return true;
             }
             return false;
         }
 
-        function getAllMoves(currentBoard, color) {
-            let moves = [];
-            for (let r = 0; r < 8; r++) {
-                for (let c = 0; c < 8; c++) {
-                    const piece = currentBoard[r][c];
-                    if (piece && ((color === 'w' && piece === piece.toUpperCase()) || (color === 'b' && piece === piece.toLowerCase()))) {
-                        moves.push(...getLegalMoves(r, c, currentBoard));
+        /* ---------------- GRANDMASTER TACTICAL AI SYSTEM ---------------- */
+        function triggerAiCalculation() {
+            if (gameOver) return;
+            
+            let allAiMoves = [];
+            for (let r = 0; r < boardSize; r++) {
+                for (let c = 0; c < boardSize; c++) {
+                    let piece = board[r][c];
+                    if (piece && piece === piece.toLowerCase() && itemSlippedState[r][c] === null) {
+                        let legal = getLegalMoves(r, c, board);
+                        allAiMoves = allAiMoves.concat(legal);
                     }
                 }
             }
-            return moves.sort((a, b) => (currentBoard[b.toR][b.toC] ? 100 : 0) - (currentBoard[a.toR][a.toC] ? 100 : 0));
-        }
 
-        function evaluateBoard(currentBoard) {
-            const values = { 'p': 100, 'n': 320, 'b': 330, 'r': 500, 'q': 900, 'k': 20000 };
-            let total = 0;
-            for (let r = 0; r < 8; r++) {
-                for (let c = 0; c < 8; c++) {
-                    const piece = currentBoard[r][c];
-                    if (!piece) continue;
-                    const isWhite = piece === piece.toUpperCase();
-                    const type = piece.toLowerCase();
-                    let score = values[type] || 0;
-                    if (type === 'p') score += isWhite ? pawnPST[r][c] : pawnPST[7 - r][c];
-                    else if (type === 'n') score += isWhite ? knightPST[r][c] : knightPST[7 - r][c];
-                    else if (type === 'b') score += isWhite ? bishopPST[r][c] : bishopPST[7 - r][c];
-                    else if (type === 'r') score += isWhite ? rookPST[r][c] : rookPST[7 - r][c];
-                    else if (type === 'q') score += isWhite ? queenPST[r][c] : queenPST[7 - r][c];
-                    else if (type === 'k') score += isWhite ? kingPST[r][c] : kingPST[7 - r][c];
-                    total += isWhite ? score : -score;
-                }
-            }
-            return total;
-        }
-
-        function minimax(currentBoard, depth, alpha, beta, isMaximizing) {
-            let wK = false, bK = false;
-            for(let r=0; r<8; r++) {
-                for(let c=0; c<8; c++) {
-                    if(currentBoard[r][c] === 'K') wK = true;
-                    if(currentBoard[r][c] === 'k') bK = true;
-                }
-            }
-            if (!wK) return -9999999;
-            if (!bK) return 9999999;
-            if (depth === 0) return evaluateBoard(currentBoard);
-
-            if (isMaximizing) {
-                let maxEval = -Infinity;
-                for (let move of getAllMoves(currentBoard, 'w')) {
-                    let temp = currentBoard.map(row => [...row]);
-                    executeMove(temp, move);
-                    maxEval = Math.max(maxEval, minimax(temp, depth - 1, alpha, beta, false));
-                    alpha = Math.max(alpha, maxEval);
-                    if (beta <= alpha) break;
-                }
-                return maxEval;
-            } else {
-                let minEval = Infinity;
-                for (let move of getAllMoves(currentBoard, 'b')) {
-                    let temp = currentBoard.map(row => [...row]);
-                    executeMove(temp, move);
-                    minEval = Math.min(minEval, minimax(temp, depth - 1, alpha, beta, true));
-                    beta = Math.min(beta, minEval);
-                    if (beta <= alpha) break;
-                }
-                return minEval;
-            }
-        }
-
-        function makeAIMove() {
-            if (gameOver || isReplaying || !isAIMode) return;
-            processSlipTurnRecovery('b');
-            const moves = getAllMoves(board, 'b');
-            if (moves.length === 0) return;
-
-            let bestMove = moves.find(m => board[m.toR][m.toC] === 'K') || null;
-
-            if (!bestMove) {
-                let bestScore = Infinity;
-                let depthLimit = (currentLevel === 5 || currentLevel === 8) ? 2 : 3;
-                for (let move of moves) {
-                    let temp = board.map(row => [...row]);
-                    executeMove(temp, move);
-                    let score = minimax(temp, depthLimit, -Infinity, Infinity, true);
-                    if (score < bestScore) { bestScore = score; bestMove = move; }
-                }
-            }
-
-            executeMove(board, bestMove || moves[0]);
-            
-            saveHistoryState();
-
-            if (!checkGameEnd()) {
+            if (allAiMoves.length === 0) {
+                // Out of options, skip turn
                 turn = 'w';
-                updateStatusDisplay();
-            } else {
-                activateReplayEngine();
+                updateStatusMessage();
+                return;
             }
-            drawBoard();
+
+            // Valuation Matrices
+            const pieceValues = { 'p': 10, 'n': 35, 'b': 35, 'r': 50, 'q': 100, 'g': 45, 'k': 20000 };
+            
+            let premiumMove = null;
+            let highestScore = -Infinity;
+
+            // Score evaluation
+            allAiMoves.forEach(move => {
+                let currentScore = 0;
+                const targetSquare = board[move.toR][move.toC];
+                
+                // 1. Immediate capture payoff
+                if (targetSquare) {
+                    currentScore += pieceValues[targetSquare.toLowerCase()] * 12;
+                }
+
+                // Simulate state to calculate safety profile
+                let simulatedBoard = board.map(row => [...row]);
+                simulatedBoard[move.toR][move.toC] = simulatedBoard[move.fromR][move.fromC];
+                simulatedBoard[move.fromR][move.fromC] = '';
+
+                // 2. Positional Development
+                if (move.toR >= (boardSize/2 - 1) && move.toR <= (boardSize/2 + 1)) currentScore += 2; // Center row control
+                if (board[move.fromR][move.fromC] === 'p' && move.toR > move.fromR) currentScore += 1; // Pawn pushing
+
+                // 3. Safety Lookahead Check (Prevent stepping directly into a trap)
+                let immediateDanger = false;
+                for (let opponentR = 0; opponentR < boardSize; opponentR++) {
+                    for (let opponentC = 0; opponentC < boardSize; opponentC++) {
+                        let oppPiece = simulatedBoard[opponentR][opponentC];
+                        if (oppPiece && oppPiece === oppPiece.toUpperCase()) {
+                            let counterMoves = getLegalMoves(opponentR, opponentC, simulatedBoard);
+                            if (counterMoves.some(cm => cm.toR === move.toR && cm.toC === move.toC)) {
+                                immediateDanger = true;
+                            }
+                        }
+                    }
+                }
+
+                if (immediateDanger) {
+                    currentScore -= pieceValues[board[move.fromR][move.fromC].toLowerCase()] * 5;
+                }
+
+                // Add slight randomness to ensure natural variance
+                currentScore += Math.random() * 3;
+
+                if (currentScore > highestScore) {
+                    highestScore = currentScore;
+                    premiumMove = move;
+                }
+            });
+
+            if (!premiumMove) {
+                premiumMove = allAiMoves[Math.floor(Math.random() * allAiMoves.length)];
+            }
+
+            processSlipTurnRecovery('b');
+            animateAndExecuteMove(premiumMove);
         }
 
-        // --- REPLAY SYSTEM CONTROLS ENGINE ---
+        /* ---------------- LOCAL REPLAY CONTROLS ---------------- */
         function activateReplayEngine() {
             isReplaying = true;
-            replayIndex = gameHistory.length - 1; 
-            levelSlider.disabled = true;
-            modeToggleBtn.disabled = true;
+            replayIndex = gameHistory.length - 1;
             replayPanel.style.display = 'flex';
             updateReplayView();
         }
@@ -853,14 +973,11 @@
             itemSlippedState = currentSnapshot.slippedState.map(row => [...row]);
             turn = currentSnapshot.activeTurn;
 
-            // Render positions cleanly
             drawBoard();
-            updateStatusDisplay();
+            updateStatusMessage();
 
-            // Update user tracking counters
             replayCounter.textContent = `Reviewing Move: ${replayIndex} / ${gameHistory.length - 1}`;
 
-            // Handle functional button logic constraints
             btnFirst.disabled = (replayIndex === 0);
             btnPrev.disabled = (replayIndex === 0);
             btnNext.disabled = (replayIndex === gameHistory.length - 1);
@@ -871,11 +988,8 @@
         btnPrev.addEventListener('click', () => { if (replayIndex > 0) { replayIndex--; updateReplayView(); } });
         btnNext.addEventListener('click', () => { if (replayIndex < gameHistory.length - 1) { replayIndex++; updateReplayView(); } });
         btnLast.addEventListener('click', () => { replayIndex = gameHistory.length - 1; updateReplayView(); });
-        
-        btnRestart.addEventListener('click', () => {
-            initializeGame();
-        });
 
+        // Spin Engine Up
         initializeGame();
     </script>
 </body>
